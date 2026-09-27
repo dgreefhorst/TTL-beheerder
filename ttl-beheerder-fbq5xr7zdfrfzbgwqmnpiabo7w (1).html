@@ -1,0 +1,2578 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TTL Beheerder</title>
+<style>
+  :root{
+    --bg:#f4f5f7;
+    --panel:#ffffff;
+    --ink:#151a23;
+    --ink-soft:#68707c;
+    --line:#dde1e6;
+    --accent:#233246;      /* slate navy — sober, corporate */
+    --accent-soft:#eaedf2;
+    --amber:#8a5a1c;
+    --mono: "IBM Plex Mono", "SFMono-Regular", Consolas, Menlo, monospace;
+    --sans: "IBM Plex Sans", -apple-system, "Segoe UI", Arial, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    font-family:var(--sans);
+    background:var(--bg);
+    color:var(--ink);
+    display:flex;
+    flex-direction:column;
+  }
+
+  /* ---------- top bar ---------- */
+  header{
+    display:flex;
+    align-items:center;
+    gap:16px;
+    padding:14px 20px;
+    background:var(--panel);
+    border-bottom:1px solid var(--line);
+    flex-shrink:0;
+    flex-wrap:wrap;
+  }
+  header h1{
+    font-size:17px;
+    font-weight:600;
+    margin:0;
+    letter-spacing:.01em;
+    white-space:nowrap;
+  }
+  header h1 span{color:var(--accent);}
+  .file-controls{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    flex:1;
+    min-width:260px;
+  }
+  .btn{
+    border:1px solid var(--line);
+    background:var(--panel);
+    color:var(--ink);
+    padding:7px 14px;
+    border-radius:3px;
+    font-size:13px;
+    font-family:var(--sans);
+    cursor:pointer;
+    transition:border-color .15s, background .15s;
+  }
+  .btn:hover{border-color:var(--accent);}
+  .btn.primary{
+    background:var(--accent);
+    color:#fff;
+    border-color:var(--accent);
+  }
+  .btn.primary:hover{background:#264c49;}
+  #fileInput{
+    position:absolute;
+    width:1px;height:1px;
+    padding:0;margin:-1px;
+    overflow:hidden;
+    clip:rect(0,0,0,0);
+    white-space:nowrap;
+    border:0;
+  }
+  #fileName{
+    font-size:12.5px;
+    color:var(--ink-soft);
+    font-family:var(--mono);
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    max-width:280px;
+  }
+  #status{
+    font-size:12.5px;
+    color:var(--accent);
+    white-space:nowrap;
+  }
+  #status.error{color:#a3392f;}
+
+  /* ---------- layout ---------- */
+  .app{
+    flex:1;
+    display:flex;
+    min-height:0;
+  }
+  .empty-state{
+    flex:1;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    flex-direction:column;
+    gap:14px;
+    color:var(--ink-soft);
+    text-align:center;
+    padding:40px;
+  }
+  .empty-state .icon{
+    width:56px;height:56px;
+    border:1.5px solid var(--line);
+    border-radius:3px;
+    display:flex;align-items:center;justify-content:center;
+    color:var(--accent);
+  }
+  .empty-state p{max-width:380px;font-size:14px;line-height:1.6;margin:0;}
+  .empty-state-or{
+    font-size:12px;
+    color:var(--ink-soft);
+    margin:14px 0 !important;
+  }
+  .new-model-form{
+    text-align:left;
+    max-width:360px;
+    width:100%;
+  }
+  .new-model-form .add-prop-row input[type="text"]{
+    width:100%;
+  }
+  .empty-state .drop-target{
+    border:1.5px dashed var(--line);
+    border-radius:3px;
+    padding:28px 40px;
+    transition:border-color .15s, background .15s;
+  }
+  .empty-state .drop-target.dragover{
+    border-color:var(--accent);
+    background:var(--accent-soft);
+  }
+
+  .sidebar{
+    width:340px;
+    flex-shrink:0;
+    background:var(--panel);
+    border-right:1px solid var(--line);
+    display:flex;
+    flex-direction:column;
+    min-height:0;
+  }
+  .tabs{
+    display:flex;
+    border-bottom:1px solid var(--line);
+  }
+  .tab{
+    flex:1;
+    padding:11px 4px;
+    text-align:center;
+    font-size:12.5px;
+    font-weight:500;
+    color:var(--ink-soft);
+    cursor:pointer;
+    border-bottom:2px solid transparent;
+    background:none;
+    border-top:none;border-left:none;border-right:none;
+    font-family:var(--sans);
+  }
+  .tab .count{
+    display:block;
+    font-size:15px;
+    font-weight:600;
+    color:var(--ink);
+    margin-top:1px;
+  }
+  .tab.active{
+    color:var(--accent);
+    border-bottom-color:var(--accent);
+  }
+  .tab.active .count{color:var(--accent);}
+
+  .search-box{
+    padding:10px 12px;
+    border-bottom:1px solid var(--line);
+  }
+  .search-box input{
+    width:100%;
+    padding:7px 10px;
+    border:1px solid var(--line);
+    border-radius:3px;
+    font-size:13px;
+    font-family:var(--sans);
+    background:var(--bg);
+  }
+  .search-box input:focus{outline:none;border-color:var(--accent);}
+
+  .list{
+    flex:1;
+    overflow-y:auto;
+    padding:6px;
+  }
+  .list-group-label{
+    font-size:11px;
+    text-transform:none;
+    color:var(--ink-soft);
+    padding:10px 10px 4px;
+    font-weight:600;
+  }
+  .list-item{
+    padding:9px 10px 9px 9px;
+    border-radius:2px;
+    border-left:2px solid transparent;
+    cursor:pointer;
+    margin-bottom:1px;
+  }
+  .list-item:hover{background:var(--bg);}
+  .list-item.selected{background:var(--accent-soft);border-left-color:var(--accent);}
+  .list-item .label{
+    font-size:13.5px;
+    color:var(--ink);
+    font-weight:500;
+    display:block;
+  }
+  .list-item.selected .label{color:var(--accent);}
+  .list-item .sub{
+    font-size:11.5px;
+    color:var(--ink-soft);
+    font-family:var(--mono);
+    display:block;
+    margin-top:1px;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .list-empty{
+    padding:24px 14px;
+    color:var(--ink-soft);
+    font-size:13px;
+    text-align:center;
+  }
+
+  /* ---------- detail panel ---------- */
+  .detail{
+    flex:1;
+    overflow-y:auto;
+    padding:32px 44px;
+    min-width:0;
+  }
+  .detail-empty{
+    color:var(--ink-soft);
+    font-size:14px;
+    padding-top:60px;
+    text-align:center;
+  }
+  .detail-kind{
+    display:inline-block;
+    font-size:11px;
+    font-weight:600;
+    color:var(--accent);
+    background:var(--accent-soft);
+    padding:3px 9px;
+    border-radius:2px;
+    margin-bottom:12px;
+  }
+  .detail h2{
+    font-size:23px;
+    margin:0 0 6px;
+    font-weight:600;
+    line-height:1.3;
+    word-break:break-word;
+  }
+  .detail h2.resource-title{
+    font-weight:700;
+  }
+  .detail .uri{
+    font-family:var(--mono);
+    font-size:12.5px;
+    color:var(--ink-soft);
+    word-break:break-all;
+    margin-bottom:22px;
+  }
+  .detail .uri a{color:var(--ink-soft);text-decoration:none;border-bottom:1px dotted var(--line);}
+  .detail .uri a:hover{color:var(--accent);border-color:var(--accent);}
+  .detail .description{
+    font-size:14.5px;
+    line-height:1.65;
+    color:var(--ink);
+    max-width:70ch;
+    margin-bottom:26px;
+    white-space:pre-wrap;
+  }
+  .detail-label-pred{
+    font-size:11px;
+    font-weight:600;
+    color:var(--accent);
+    background:var(--accent-soft);
+    padding:2px 7px;
+    border-radius:2px;
+    white-space:nowrap;
+  }
+  .detail-heading{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-bottom:6px;
+  }
+  .detail-heading h2{margin-bottom:0;}
+  .pval-description{
+    font-size:13px;
+    line-height:1.65;
+    color:var(--ink);
+    max-width:70ch;
+    white-space:pre-wrap;
+  }
+
+  .prop-table{
+    border-top:1px solid var(--line);
+  }
+  .prop-row{
+    display:flex;
+    gap:24px;
+    padding:14px 0;
+    border-bottom:1px solid var(--line);
+    align-items:flex-start;
+  }
+  .prop-row .pname{
+    width:200px;
+    flex-shrink:0;
+    font-size:13px;
+    font-weight:500;
+    color:var(--ink);
+    padding-top:1px;
+  }
+  .prop-row .pname .puri{
+    display:block;
+    font-family:var(--mono);
+    font-size:11px;
+    color:var(--ink-soft);
+    font-weight:400;
+    margin-top:2px;
+    word-break:break-all;
+  }
+  .prop-row .pvals{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+    min-width:0;
+  }
+  .pval{
+    font-size:13.5px;
+    line-height:1.5;
+    word-break:break-word;
+  }
+  .pval .lang-tag{
+    font-size:10.5px;
+    color:var(--amber);
+    font-family:var(--mono);
+    margin-left:4px;
+  }
+  .lang-edit{
+    font-size:10.5px;
+    font-family:var(--mono);
+    color:var(--amber);
+    border:1px solid var(--line);
+    border-radius:2px;
+    background:var(--panel);
+    padding:1px 2px;
+    cursor:pointer;
+  }
+  .lang-edit:hover{border-color:var(--accent);}
+  .lang-edit:focus{outline:none;border-color:var(--accent);}
+  .pval-link{
+    color:var(--accent);
+    cursor:pointer;
+    text-decoration:none;
+    border-bottom:1px solid transparent;
+    font-size:13px;
+  }
+  .pval-link:hover{border-bottom-color:var(--accent);}
+  .pval-link .pv-uri{
+    display:block;
+    font-family:var(--mono);
+    font-size:10.5px;
+    color:var(--ink-soft);
+  }
+
+  .section-title{
+    font-size:13px;
+    font-weight:600;
+    color:var(--ink);
+    margin:30px 0 4px;
+  }
+
+  .pval-editable, .editable-title, .editable-desc{
+    cursor:text;
+    border-radius:2px;
+    padding:2px 5px;
+    margin:-2px -5px;
+    outline:none;
+    transition:background .12s, box-shadow .12s;
+  }
+  .pval-editable:hover, .editable-title:hover, .editable-desc:hover{
+    background:var(--accent-soft);
+  }
+  .pval-editable:focus, .editable-title:focus, .editable-desc:focus{
+    background:#ffffff;
+    box-shadow:0 0 0 1.5px var(--accent);
+  }
+  .pval-wrap{
+    display:flex;
+    align-items:baseline;
+    gap:6px;
+    flex-wrap:wrap;
+  }
+  .edit-hint{
+    font-size:12px;
+    color:var(--ink-soft);
+    margin:-14px 0 22px;
+  }
+  .rel-wrap{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    flex-wrap:wrap;
+  }
+  .rel-edit-btn{
+    border:1px solid var(--line);
+    background:var(--panel);
+    color:var(--ink-soft);
+    font-size:11px;
+    line-height:1;
+    padding:4px 6px;
+    border-radius:2px;
+    cursor:pointer;
+    font-family:var(--sans);
+  }
+  .rel-edit-btn:hover{border-color:var(--accent);color:var(--accent);}
+  .rel-picker{
+    width:100%;
+    max-width:420px;
+    border:1px solid var(--accent);
+    border-radius:3px;
+    padding:8px;
+    background:#fff;
+  }
+  .rel-picker-input{
+    width:100%;
+    padding:6px 8px;
+    border:1px solid var(--line);
+    border-radius:3px;
+    font-size:13px;
+    font-family:var(--sans);
+  }
+  .rel-picker-input:focus{outline:none;border-color:var(--accent);}
+  .rel-picker-input.invalid{border-color:#a3392f;}
+  .rel-picker-list{
+    max-height:220px;
+    overflow-y:auto;
+    margin-top:6px;
+  }
+  .rel-option{
+    padding:6px 8px;
+    border-radius:2px;
+    cursor:pointer;
+    display:flex;
+    flex-direction:column;
+  }
+  .rel-option:hover{background:var(--accent-soft);}
+  .rel-option .label{font-size:13px;color:var(--ink);}
+  .rel-option .sub{font-size:11px;color:var(--ink-soft);font-family:var(--mono);}
+  .rel-option-empty{
+    padding:8px 4px;
+    font-size:12px;
+    color:var(--ink-soft);
+  }
+  .rel-picker-cancel{
+    margin-top:6px;
+    border:none;
+    background:none;
+    color:var(--ink-soft);
+    font-size:12px;
+    cursor:pointer;
+    padding:2px 4px;
+    font-family:var(--sans);
+  }
+  .rel-picker-cancel:hover{color:var(--accent);}
+
+  .schema-kind{
+    display:inline-block;
+    font-size:10.5px;
+    font-weight:600;
+    color:var(--accent);
+    background:var(--accent-soft);
+    padding:2px 7px;
+    border-radius:2px;
+    margin-right:8px;
+  }
+  .schema-count{
+    font-size:12px;
+    color:var(--ink-soft);
+  }
+  .instance-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill, minmax(190px, 1fr));
+    gap:2px;
+    border:1px solid var(--line);
+    border-radius:3px;
+    overflow:hidden;
+  }
+  .instance-chip{
+    display:block;
+    background:var(--panel);
+    padding:9px 11px;
+    text-decoration:none;
+    cursor:pointer;
+    border-bottom:1px solid var(--line);
+  }
+  .instance-chip:hover{background:var(--accent-soft);}
+  .instance-chip .label{
+    display:block;
+    font-size:13px;
+    font-weight:500;
+    color:var(--ink);
+  }
+  .instance-chip .sub{
+    display:block;
+    font-size:11px;
+    font-family:var(--mono);
+    color:var(--ink-soft);
+    margin-top:1px;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+
+  .val-delete-btn{
+    border:1px solid var(--line);
+    background:var(--panel);
+    color:var(--ink-soft);
+    font-size:13px;
+    line-height:1;
+    padding:4px 7px;
+    border-radius:2px;
+    cursor:pointer;
+    font-family:var(--sans);
+  }
+  .val-delete-btn:hover{border-color:#a3392f;color:#a3392f;}
+  .add-prop-btn{margin-top:16px;}
+  .add-prop-form{
+    border:1px solid var(--accent);
+    border-radius:3px;
+    padding:14px;
+    margin-top:16px;
+    max-width:480px;
+  }
+  .add-prop-row{margin-bottom:12px;}
+  .add-prop-row:last-of-type{margin-bottom:0;}
+  .add-prop-label{
+    font-size:11.5px;
+    font-weight:600;
+    color:var(--ink-soft);
+    margin-bottom:5px;
+  }
+  .create-bnode-toggle{
+    display:flex;
+    align-items:center;
+    gap:5px;
+    cursor:pointer;
+    font-size:11.5px;
+    font-weight:600;
+    color:var(--ink-soft);
+  }
+  .add-prop-row input[type="text"]{
+    width:100%;
+    padding:6px 8px;
+    border:1px solid var(--line);
+    border-radius:3px;
+    font-size:13px;
+    font-family:var(--sans);
+  }
+  .add-prop-row input[type="text"]:focus{outline:none;border-color:var(--accent);}
+  .add-prop-kind-row{
+    display:flex;
+    gap:18px;
+    font-size:13px;
+    color:var(--ink);
+  }
+  .add-prop-kind-row label{display:flex;align-items:center;gap:5px;cursor:pointer;}
+  .add-prop-value-area input[type="text"]{margin-bottom:6px;}
+  .add-prop-value-area input[type="text"]:last-child{margin-bottom:0;}
+  .add-prop-error{
+    font-size:12px;
+    color:#a3392f;
+    min-height:14px;
+    margin-bottom:8px;
+  }
+  .add-prop-actions{display:flex;gap:10px;align-items:center;}
+
+  .sidebar-toolbar{
+    padding:8px 10px 0;
+  }
+  .sidebar-add-btn{
+    width:100%;
+  }
+  .sidebar-form-area:not(:empty){
+    padding:10px;
+    border-bottom:1px solid var(--line);
+  }
+  .create-form .add-prop-row{margin-bottom:10px;}
+  .create-form .add-prop-row:last-of-type{margin-bottom:0;}
+  .danger-btn{
+    border:1px solid #a3392f;
+    color:#a3392f;
+    background:var(--panel);
+    padding:7px 14px;
+    border-radius:3px;
+    font-size:13px;
+    font-family:var(--sans);
+    cursor:pointer;
+    margin-top:24px;
+  }
+  .danger-btn:hover{background:#a3392f;color:#fff;}
+
+  #downloadBtn:disabled{opacity:.5;cursor:default;}
+
+  .modal-overlay{
+    position:fixed;
+    inset:0;
+    background:rgba(20,25,35,.45);
+    display:flex;
+    align-items:flex-start;
+    justify-content:center;
+    padding:60px 20px;
+    z-index:50;
+  }
+  .modal{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:4px;
+    max-width:640px;
+    width:100%;
+    padding:22px 24px;
+    box-shadow:0 12px 40px rgba(0,0,0,.18);
+    max-height:80vh;
+    overflow-y:auto;
+  }
+  .modal-title{
+    margin:0 0 14px;
+    font-size:17px;
+    font-weight:600;
+  }
+  .modal-actions{
+    display:flex;
+    gap:10px;
+    align-items:center;
+    margin-top:14px;
+  }
+  .prefix-row{
+    display:flex;
+    gap:8px;
+    align-items:center;
+    margin-bottom:8px;
+  }
+  .prefix-row input{
+    padding:6px 8px;
+    border:1px solid var(--line);
+    border-radius:3px;
+    font-size:13px;
+    font-family:var(--mono);
+    background:var(--bg);
+  }
+  .prefix-row input:focus{outline:none;border-color:var(--accent);}
+  .prefix-row .prefix-name{
+    width:110px;
+    flex-shrink:0;
+  }
+  .prefix-row .prefix-ns{
+    flex:1;
+    min-width:0;
+  }
+  #addPrefixBtn{margin-top:4px;}
+
+  ::-webkit-scrollbar{width:9px;height:9px;}
+  ::-webkit-scrollbar-thumb{background:#d3cfc5;border-radius:5px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+
+  @media (max-width:760px){
+    .app{flex-direction:column;}
+    .sidebar{width:100%;height:44vh;border-right:none;border-bottom:1px solid var(--line);}
+    .detail{padding:24px 20px;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>TTL <span>Beheerder</span></h1>
+  <div class="file-controls">
+    <label class="btn primary" id="pickBtn" for="fileInput">Bestand openen…</label>
+    <input type="file" id="fileInput" accept=".ttl,.turtle,.txt">
+    <button class="btn" id="newFileBtn">+ Nieuw model</button>
+    <button class="btn" id="downloadBtn" style="display:none;">Download gewijzigd bestand</button>
+    <button class="btn" id="prefixBtn" style="display:none;">Prefixen</button>
+    <span id="fileName"></span>
+    <span id="status"></span>
+  </div>
+</header>
+
+<div class="app" id="app">
+  <div class="empty-state" id="emptyState">
+    <div class="drop-target" id="dropTarget">
+      <div class="icon">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+          <circle cx="6" cy="6" r="2.4"/><circle cx="18" cy="6" r="2.4"/><circle cx="12" cy="18" r="2.4"/>
+          <path d="M8.1 6.9 L15.9 6.9 M7.4 8 L11 16.4 M16.6 8 L13 16.4"/>
+        </svg>
+      </div>
+      <p><strong>Sleep een .ttl-bestand hierheen</strong><br>of klik op "Bestand openen" om een Turtle/RDF-bestand te laden en te doorbladeren.</p>
+      <p class="empty-state-or">— of —</p>
+      <button type="button" class="btn primary" id="emptyStateNewModelBtn">+ Nieuw model beginnen</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="prefixOverlay" style="display:none;">
+  <div class="modal">
+    <h3 class="modal-title">Prefixen beheren</h3>
+    <p class="edit-hint" style="margin:0 0 12px;">Pas prefixnamen en namespaces aan. Gebruikte IRIs in het model blijven geldig; bij het downloaden worden ze met deze prefixes geschreven.</p>
+    <div class="prefix-list" id="prefixList"></div>
+    <button type="button" class="btn" id="addPrefixBtn">+ Prefix toevoegen</button>
+    <div class="add-prop-error" id="prefixError"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn primary" id="prefixSaveBtn">Opslaan</button>
+      <button type="button" class="rel-picker-cancel" id="prefixCancelBtn">Annuleren</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+
+/* ================= TTL / TURTLE PARSER ================= */
+/* Hand-written tokenizer + recursive-descent parser for a practical subset
+   of Turtle: @prefix/@base, PN-prefixed names, full IRIs, blank nodes
+   (labelled and [...] anonymous), RDF collections (...), typed and
+   language-tagged literals incl. triple-quoted multi-line strings,
+   'a' keyword, ';' and ',' list continuations, comments. */
+
+function parseTurtle(text){
+  const prefixes = {};
+  let base = null;
+  const triples = []; // {s,p,o} each as {type:'uri'|'bnode'|'literal', value, datatype, lang}
+  let i = 0;
+  const n = text.length;
+  let bnodeCounter = 0;
+
+  function error(msg){
+    const upto = text.slice(0, i);
+    const line = upto.split('\n').length;
+    throw new Error('Parsefout op regel ' + line + ': ' + msg);
+  }
+
+  function peek(){ return text[i]; }
+  function isWS(c){ return c === ' ' || c === '\t' || c === '\r' || c === '\n'; }
+
+  function skipWS(){
+    for(;;){
+      while(i < n && isWS(text[i])) i++;
+      if(text[i] === '#'){
+        while(i < n && text[i] !== '\n') i++;
+      } else {
+        break;
+      }
+    }
+  }
+
+  function startsWith(s){ return text.startsWith(s, i); }
+
+  function readIRIREF(){
+    // assumes current char is '<'
+    i++; // skip <
+    let start = i;
+    let buf = '';
+    while(i < n && text[i] !== '>'){
+      if(text[i] === '\\'){
+        buf += text.slice(start, i);
+        i++;
+        buf += unescapeChar();
+        start = i;
+      } else {
+        i++;
+      }
+    }
+    buf += text.slice(start, i);
+    if(text[i] !== '>') error('onafgesloten IRI');
+    i++; // skip >
+    return resolveIRI(buf);
+  }
+
+  function unescapeChar(){
+    const c = text[i];
+    if(c === 'u'){
+      const hex = text.slice(i+1, i+5); i += 5;
+      return String.fromCodePoint(parseInt(hex,16));
+    } else if(c === 'U'){
+      const hex = text.slice(i+1, i+9); i += 9;
+      return String.fromCodePoint(parseInt(hex,16));
+    } else {
+      i++;
+      const map = {n:'\n', t:'\t', r:'\r', '"':'"', "'":"'", '\\':'\\', b:'\b', f:'\f'};
+      return map[c] !== undefined ? map[c] : c;
+    }
+  }
+
+  function resolveIRI(iri){
+    if(/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(iri)) return iri; // absolute
+    if(base){
+      try{ return new URL(iri, base).toString(); }catch(e){ return iri; }
+    }
+    return iri;
+  }
+
+  const PN_CHARS_BASE = /[A-Za-z\u00C0-\uFFFF]/;
+  function isPNCharsStart(c){ return c && PN_CHARS_BASE.test(c); }
+  function isPNChars(c){ return c && (PN_CHARS_BASE.test(c) || /[0-9_\-\u00B7]/.test(c)); }
+
+  function readPN_PREFIX(){
+    let start = i;
+    if(!isPNCharsStart(text[i])) return null;
+    i++;
+    while(i < n && (isPNChars(text[i]) || text[i]==='.')) i++;
+    // trim trailing dots
+    let end = i;
+    while(end > start && text[end-1] === '.') end--;
+    i = end;
+    return text.slice(start, end);
+  }
+
+  function readPN_LOCAL(){
+    let start = i;
+    while(i < n){
+      const c = text[i];
+      if(c === '\\' ){ i+=2; continue; }
+      if(c === '%'){ i+=3; continue; }
+      if(isPNChars(c) || c===':' || c==='.'){ i++; continue; }
+      break;
+    }
+    let end = i;
+    while(end > start && text[end-1] === '.') end--;
+    i = end;
+    let raw = text.slice(start, end);
+    raw = raw.replace(/\\([_~.\-!$&'()*+,;=/?#@%])/g, '$1');
+    return raw;
+  }
+
+  function readPrefixedName(){
+    // reads Prefix:local, prefix may be empty
+    let start = i;
+    let prefix = '';
+    const save = i;
+    if(text[i] === ':'){
+      prefix = '';
+    } else {
+      const p = readPN_PREFIX();
+      if(p === null){ i = save; return null; }
+      prefix = p;
+    }
+    if(text[i] !== ':'){ i = save; return null; }
+    i++; // skip colon
+    const local = readPN_LOCAL();
+    const ns = prefixes[prefix];
+    if(ns === undefined) error('onbekend prefix "'+prefix+'"');
+    return ns + local;
+  }
+
+  function readBlankNodeLabel(){
+    // assumes _:
+    i += 2;
+    let start = i;
+    if(!isPNCharsStart(text[i]) && !/[0-9]/.test(text[i])) error('ongeldig blank node label');
+    i++;
+    while(i < n && (isPNChars(text[i]) || text[i]==='.')) i++;
+    let end = i;
+    while(end > start && text[end-1] === '.') end--;
+    i = end;
+    return '_:' + text.slice(start, end);
+  }
+
+  function readStringLiteral(){
+    const quoteChar = text[i];
+    let triple = false;
+    if(text.startsWith(quoteChar.repeat(3), i)){ triple = true; i += 3; }
+    else { i += 1; }
+    const endSeq = triple ? quoteChar.repeat(3) : quoteChar;
+    let start = i;
+    let buf = '';
+    while(i < n){
+      if(text[i] === '\\'){
+        buf += text.slice(start, i);
+        i++;
+        buf += unescapeChar();
+        start = i;
+        continue;
+      }
+      if(text.startsWith(endSeq, i)){
+        buf += text.slice(start, i);
+        i += endSeq.length;
+        return buf;
+      }
+      i++;
+    }
+    error('onafgesloten string');
+  }
+
+  function readNumberOrOther(){
+    let start = i;
+    if(text[i]==='+' || text[i]==='-') i++;
+    while(i<n && /[0-9]/.test(text[i])) i++;
+    if(text[i]==='.'){ i++; while(i<n && /[0-9]/.test(text[i])) i++; }
+    if(text[i]==='e' || text[i]==='E'){
+      i++;
+      if(text[i]==='+'||text[i]==='-') i++;
+      while(i<n && /[0-9]/.test(text[i])) i++;
+    }
+    return text.slice(start,i);
+  }
+
+  function parseCollection(){
+    // assumes current char '('
+    i++; skipWS();
+    const items = [];
+    while(true){
+      skipWS();
+      if(text[i] === ')'){ i++; break; }
+      const node = parseObjectTerm();
+      items.push(node);
+      skipWS();
+    }
+    // build RDF list structure with bnodes
+    if(items.length === 0){
+      return {type:'uri', value:'http://www.w3.org/1999/02/22-rdf-syntax-ns#nil'};
+    }
+    let headBnode = null;
+    let prevBnode = null;
+    for(let k=0;k<items.length;k++){
+      const b = {type:'bnode', value:'_:coll' + (++bnodeCounter)};
+      if(k===0) headBnode = b;
+      if(prevBnode){
+        triples.push({s:prevBnode, p:{type:'uri',value:'http://www.w3.org/1999/02/22-rdf-syntax-ns#rest'}, o:b});
+      }
+      triples.push({s:b, p:{type:'uri',value:'http://www.w3.org/1999/02/22-rdf-syntax-ns#first'}, o:items[k]});
+      prevBnode = b;
+    }
+    triples.push({s:prevBnode, p:{type:'uri',value:'http://www.w3.org/1999/02/22-rdf-syntax-ns#rest'}, o:{type:'uri',value:'http://www.w3.org/1999/02/22-rdf-syntax-ns#nil'}});
+    return headBnode;
+  }
+
+  function parseBlankNodePropertyList(){
+    // assumes current char '['
+    i++; skipWS();
+    const subj = {type:'bnode', value:'_:anon' + (++bnodeCounter)};
+    if(text[i] === ']'){ i++; return subj; }
+    parsePredicateObjectList(subj);
+    skipWS();
+    if(text[i] !== ']') error('verwacht "]"');
+    i++;
+    return subj;
+  }
+
+  function parseObjectTerm(){
+    skipWS();
+    const c = text[i];
+    if(c === '<') return {type:'uri', value: readIRIREF()};
+    if(c === '_' && text[i+1]===':') return {type:'bnode', value: readBlankNodeLabel()};
+    if(c === '[') return parseBlankNodePropertyList();
+    if(c === '(') return parseCollection();
+    if(c === '"' || c === "'"){
+      const val = readStringLiteral();
+      skipWS_none: // check for lang/datatype directly after (no ws allowed)
+      if(text[i] === '@'){
+        i++;
+        let start=i;
+        while(i<n && /[A-Za-z0-9\-]/.test(text[i])) i++;
+        return {type:'literal', value:val, lang:text.slice(start,i)};
+      } else if(text[i]==='^' && text[i+1]==='^'){
+        i+=2;
+        let dt;
+        if(text[i]==='<') dt = readIRIREF();
+        else dt = readPrefixedName();
+        return {type:'literal', value:val, datatype:dt};
+      }
+      return {type:'literal', value:val, datatype:'http://www.w3.org/2001/XMLSchema#string'};
+    }
+    if(c === 't' && text.startsWith('true', i) && !isPNChars(text[i+4])){
+      i+=4; return {type:'literal', value:'true', datatype:'http://www.w3.org/2001/XMLSchema#boolean'};
+    }
+    if(c === 'f' && text.startsWith('false', i) && !isPNChars(text[i+5])){
+      i+=5; return {type:'literal', value:'false', datatype:'http://www.w3.org/2001/XMLSchema#boolean'};
+    }
+    if(/[0-9+\-.]/.test(c)){
+      const numStr = readNumberOrOther();
+      if(numStr === '' || numStr === '+' || numStr === '-'){
+        // not actually a number, fall through to prefixed name attempt
+      } else {
+        let dt = 'http://www.w3.org/2001/XMLSchema#integer';
+        if(numStr.indexOf('.')>=0 || numStr.indexOf('e')>=0 || numStr.indexOf('E')>=0) dt = 'http://www.w3.org/2001/XMLSchema#decimal';
+        return {type:'literal', value:numStr, datatype:dt};
+      }
+    }
+    const pn = readPrefixedName();
+    if(pn !== null) return {type:'uri', value:pn};
+    error('onverwacht teken "'+c+'" bij object');
+  }
+
+  function parseVerb(){
+    skipWS();
+    if(text[i]==='a' && isWS(text[i+1])){
+      i++;
+      return {type:'uri', value:'http://www.w3.org/1999/02/22-rdf-syntax-ns#type'};
+    }
+    if(text[i]==='<') return {type:'uri', value: readIRIREF()};
+    const pn = readPrefixedName();
+    if(pn !== null) return {type:'uri', value:pn};
+    error('verwacht predicate');
+  }
+
+  function parsePredicateObjectList(subj){
+    while(true){
+      skipWS();
+      if(text[i]===';' ){ i++; skipWS(); continue; }
+      if(text[i]==='.' || text[i]==='}' || text[i]===']' || i>=n) return;
+      const pred = parseVerb();
+      skipWS();
+      // object list
+      while(true){
+        const obj = parseObjectTerm();
+        triples.push({s:subj, p:pred, o:obj});
+        skipWS();
+        if(text[i] === ','){ i++; skipWS(); continue; }
+        break;
+      }
+      skipWS();
+      if(text[i] === ';'){ i++; skipWS();
+        // could be end of statement after trailing ';'
+        if(text[i]==='.' ) { i++; return; }
+        continue;
+      }
+      return;
+    }
+  }
+
+  function parseStatement(){
+    skipWS();
+    if(i>=n) return false;
+    if(startsWith('@prefix') || (startsWith('PREFIX') ) || (startsWith('prefix'))){
+      if(startsWith('@prefix')){ i+=7; }
+      else { i+=6; }
+      skipWS();
+      let pname = readPN_PREFIX() || '';
+      if(text[i] !== ':') error('verwacht ":" in prefix-declaratie');
+      i++;
+      skipWS();
+      const iri = readIRIREF();
+      prefixes[pname] = iri;
+      skipWS();
+      if(text[i]==='.') i++;
+      return true;
+    }
+    if(startsWith('@base') || startsWith('BASE') || startsWith('base')){
+      if(startsWith('@base')){ i+=5; } else { i+=4; }
+      skipWS();
+      base = readIRIREF();
+      skipWS();
+      if(text[i]==='.') i++;
+      return true;
+    }
+    // subject
+    let subj;
+    if(text[i]==='<') subj = {type:'uri', value: readIRIREF()};
+    else if(text[i]==='_' && text[i+1]===':') subj = {type:'bnode', value: readBlankNodeLabel()};
+    else if(text[i]==='[') subj = parseBlankNodePropertyList();
+    else if(text[i]==='('){ subj = parseCollection(); }
+    else {
+      const pn = readPrefixedName();
+      if(pn === null) error('onverwacht teken "'+text[i]+'" bij subject');
+      subj = {type:'uri', value: pn};
+    }
+    skipWS();
+    if(text[i] === '.'){ i++; return true; } // bare blank node statement (rare)
+    parsePredicateObjectList(subj);
+    skipWS();
+    if(text[i] === '.') i++;
+    return true;
+  }
+
+  while(true){
+    skipWS();
+    if(i>=n) break;
+    parseStatement();
+  }
+
+  return {prefixes, triples};
+}
+
+/* ================= DATA MODEL BUILD ================= */
+
+const RDF = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#';
+const RDFS = 'http://www.w3.org/2000/01/rdf-schema#';
+const OWL = 'http://www.w3.org/2002/07/owl#';
+const SKOS = 'http://www.w3.org/2004/02/skos/core#';
+const SHACL = 'http://www.w3.org/ns/shacl#';
+const XSD = 'http://www.w3.org/2001/XMLSchema#';
+
+const CORE_NS = [RDF, RDFS, OWL, SHACL, XSD];
+
+function isCoreURI(uri){
+  return CORE_NS.some(ns => uri.startsWith(ns));
+}
+
+const LABEL_PREDS = [RDFS+'label', SKOS+'prefLabel', 'http://purl.org/dc/terms/title', 'http://xmlns.com/foaf/0.1/name', SKOS+'notation'];
+const DESC_PREDS = [RDFS+'comment', SKOS+'definition', SKOS+'scopeNote', 'http://purl.org/dc/terms/description'];
+
+let model = null; // built model
+
+function buildModel(parsed){
+  const {prefixes, triples} = parsed;
+  if(prefixes['rdf'] === undefined) prefixes['rdf'] = RDF;
+  const invPrefixes = {};
+  Object.keys(prefixes).forEach(p => { invPrefixes[prefixes[p]] = p; });
+
+  // node registry: key = uri or bnode id
+  const nodes = {}; // key -> {uri, isBnode, out:[{p,o}], in:[{p,s}], types:Set}
+
+  function getNode(term){
+    const key = term.value;
+    if(!nodes[key]) nodes[key] = {id:key, isBnode:term.type==='bnode', out:[], in:[], types:new Set()};
+    return nodes[key];
+  }
+
+  triples.forEach(t => {
+    const sNode = getNode(t.s);
+    if(t.o.type !== 'literal'){
+      const oNode = getNode(t.o);
+      sNode.out.push({p:t.p.value, o:t.o});
+      oNode.in.push({p:t.p.value, s:t.s});
+    } else {
+      sNode.out.push({p:t.p.value, o:t.o});
+    }
+    if(t.p.value === RDF+'type' && t.o.type === 'uri'){
+      sNode.types.add(t.o.value);
+    }
+  });
+
+  // classify declared classes / properties
+  const declaredClasses = new Set();
+  const declaredObjProps = new Set();
+  const declaredDataProps = new Set();
+  const declaredProps = new Set();
+
+  Object.values(nodes).forEach(node => {
+    node.types.forEach(t => {
+      if(t === RDFS+'Class' || t === OWL+'Class') declaredClasses.add(node.id);
+      if(t === OWL+'ObjectProperty') declaredObjProps.add(node.id);
+      if(t === OWL+'DatatypeProperty') declaredDataProps.add(node.id);
+      if(t === RDF+'Property') declaredProps.add(node.id);
+    });
+  });
+
+  // predicate usage stats: for each predicate URI used in triples, is object ever a literal / ever a resource?
+  const predUsage = {}; // uri -> {literal:bool, resource:bool, count:number}
+  triples.forEach(t => {
+    if(isCoreURI(t.p.value) && t.p.value !== RDF+'type') {
+      // still track usage minimally but these get filtered from lists later anyway
+    }
+    if(!predUsage[t.p.value]) predUsage[t.p.value] = {literal:false, resource:false, count:0};
+    predUsage[t.p.value].count++;
+    if(t.o.type === 'literal') predUsage[t.p.value].literal = true;
+    else predUsage[t.p.value].resource = true;
+  });
+
+  // every subject's rdf:type targets are "classes used"; every node declared as Class is a "class"
+  const usedAsClass = new Set();
+  Object.values(nodes).forEach(node => {
+    node.types.forEach(t => usedAsClass.add(t));
+  });
+
+  const allClassURIs = new Set([...declaredClasses, ...usedAsClass].filter(u => !isCoreURI(u)));
+
+  // properties: declared as property types, OR used as predicate somewhere (and not core, not rdf:type)
+  const allPropURIs = new Set();
+  [...declaredObjProps, ...declaredDataProps, ...declaredProps].forEach(u => { if(!isCoreURI(u)) allPropURIs.add(u); });
+  Object.keys(predUsage).forEach(u => { if(!isCoreURI(u) && u !== RDF+'type') allPropURIs.add(u); });
+
+  function classifyProp(uri){
+    if(declaredObjProps.has(uri)) return 'relatie';
+    if(declaredDataProps.has(uri)) return 'eigenschap';
+    const usage = predUsage[uri];
+    if(usage){
+      if(usage.resource && !usage.literal) return 'relatie';
+      if(usage.literal && !usage.resource) return 'eigenschap';
+      if(usage.resource && usage.literal) return 'relatie'; // mixed -> treat as relation (more informative)
+    }
+    return 'eigenschap';
+  }
+
+  const propKind = {};
+  allPropURIs.forEach(u => { propKind[u] = classifyProp(u); });
+
+  // individuals: nodes with an rdf:type that is not itself a class/property meta-type (incl. blank nodes)
+  const individuals = [];
+  Object.values(nodes).forEach(node => {
+    if(allClassURIs.has(node.id) || allPropURIs.has(node.id)) return; // classes/properties shown in own tabs
+    const meaningfulTypes = [...node.types].filter(t => !isCoreURI(t));
+    if(meaningfulTypes.length > 0 || node.out.length > 0){
+      individuals.push(node.id);
+    }
+  });
+
+  function localName(uri){
+    if(invPrefixes[uri] !== undefined) return null;
+    const m = uri.match(/([#\/])([^#\/]+)$/);
+    return m ? m[2] : uri;
+  }
+
+  function curie(uri){
+    // find longest matching namespace prefix
+    let best = null;
+    Object.keys(prefixes).forEach(p => {
+      const ns = prefixes[p];
+      if(uri.startsWith(ns) && (!best || ns.length > prefixes[best].length)){
+        best = p;
+      }
+    });
+    if(best !== null){
+      return (best === '' ? ':' : best+':') + uri.slice(prefixes[best].length);
+    }
+    return uri;
+  }
+
+  function findLiteralPred(uri, preds){
+    const node = nodes[uri];
+    if(!node) return null;
+    for(const lp of preds){
+      const hit = node.out.find(o => o.p === lp && o.o.type==='literal');
+      if(hit) return hit.o;
+    }
+    return null;
+  }
+
+  function labelTermOf(uri){ return findLiteralPred(uri, LABEL_PREDS); }
+  function descTermOf(uri){ return findLiteralPred(uri, DESC_PREDS); }
+
+  function labelOf(uri){
+    const term = labelTermOf(uri);
+    if(term) return term.value;
+    const m = uri.match(/([#\/])([^#\/]+)$/);
+    return m ? decodeURIComponent(m[2]).replace(/([a-z])([A-Z])/g,'$1 $2') : uri;
+  }
+
+  function rawLabelOf(uri){
+    const term = labelTermOf(uri);
+    if(term) return term.value;
+    const m = uri.match(/([#\/])([^#\/]+)$/);
+    return m ? decodeURIComponent(m[2]) : uri;
+  }
+
+  function descOf(uri){
+    const term = descTermOf(uri);
+    return term ? term.value : null;
+  }
+
+  return {
+    prefixes, invPrefixes, nodes, predUsage, triples,
+    classes: [...allClassURIs].sort((a,b)=>labelOf(a).localeCompare(labelOf(b))),
+    properties: [...allPropURIs].sort((a,b)=>labelOf(a).localeCompare(labelOf(b))),
+    propKind,
+    individuals: individuals.sort((a,b)=>labelOf(a).localeCompare(labelOf(b))),
+    curie, labelOf, rawLabelOf, descOf, labelTermOf, descTermOf,
+    tripleCount: triples.length
+  };
+}
+
+/* ================= UI ================= */
+
+const app = document.getElementById('app');
+const emptyState = document.getElementById('emptyState');
+const dropTarget = document.getElementById('dropTarget');
+const fileInput = document.getElementById('fileInput');
+const pickBtn = document.getElementById('pickBtn');
+const fileNameEl = document.getElementById('fileName');
+const statusEl = document.getElementById('status');
+const downloadBtn = document.getElementById('downloadBtn');
+downloadBtn.addEventListener('click', downloadTurtle);
+const newFileBtn = document.getElementById('newFileBtn');
+newFileBtn.addEventListener('click', startNewModel);
+const prefixBtn = document.getElementById('prefixBtn');
+prefixBtn.addEventListener('click', openPrefixManager);
+document.getElementById('prefixSaveBtn').addEventListener('click', savePrefixes);
+document.getElementById('prefixCancelBtn').addEventListener('click', closePrefixManager);
+document.getElementById('addPrefixBtn').addEventListener('click', () => {
+  prefixWorking.push({name:'', ns:''});
+  renderPrefixRows();
+  const names = document.querySelectorAll('#prefixList .prefix-name');
+  if(names.length) names[names.length-1].focus();
+});
+document.getElementById('prefixOverlay').addEventListener('click', e => {
+  if(e.target.id === 'prefixOverlay') closePrefixManager();
+});
+const emptyStateNewModelBtn = document.getElementById('emptyStateNewModelBtn');
+emptyStateNewModelBtn.addEventListener('click', (e) => { e.preventDefault(); startNewModel(); });
+
+let currentTab = 'classes';
+let selectedId = null;
+let searchQuery = '';
+let allResourceOptions = [];
+let allPropertyOptions = [];
+let allClassOptions = [];
+
+fileInput.addEventListener('change', e => {
+  if(e.target.files && e.target.files[0]) loadFile(e.target.files[0]);
+});
+['dragenter','dragover'].forEach(evt => {
+  dropTarget.addEventListener(evt, e => { e.preventDefault(); dropTarget.classList.add('dragover'); });
+});
+['dragleave','drop'].forEach(evt => {
+  dropTarget.addEventListener(evt, e => { e.preventDefault(); dropTarget.classList.remove('dragover'); });
+});
+dropTarget.addEventListener('drop', e => {
+  if(e.dataTransfer.files && e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
+});
+document.body.addEventListener('dragover', e => e.preventDefault());
+document.body.addEventListener('drop', e => e.preventDefault());
+
+function stripBOM(text){
+  return text.charCodeAt(0) === 0xFEFF ? text.slice(1) : text;
+}
+
+function showLoadError(message){
+  app.innerHTML = `
+    <div class="empty-state">
+      <div class="drop-target" id="dropTarget2" style="border-color:#a3392f;">
+        <div class="icon" style="color:#a3392f;border-color:#a3392f;">!</div>
+        <p><strong>Kon het bestand niet verwerken.</strong><br>${esc(message)}</p>
+      </div>
+    </div>`;
+}
+
+function startNewModel(){
+  if(model && hasUnsavedChanges){
+    if(!confirm('Je hebt niet-gedownloade wijzigingen in het huidige model. Weet je zeker dat je een nieuw model wilt beginnen? Deze wijzigingen gaan dan verloren.')) return;
+  }
+  renderNewModelForm();
+}
+
+function renderNewModelForm(){
+  app.innerHTML = `
+    <div class="empty-state">
+      <div class="drop-target new-model-form">
+        <p style="text-align:center;"><strong>Nieuw model beginnen</strong><br>Kies een prefix en namespace voor je eigen vocabulaire. De standaard RDF/RDFS/OWL/XSD-prefixes worden automatisch toegevoegd.</p>
+        <div class="add-prop-row">
+          <div class="add-prop-label">Prefix</div>
+          <input type="text" id="newModelPrefix" value="ex">
+        </div>
+        <div class="add-prop-row">
+          <div class="add-prop-label">Namespace-URI</div>
+          <input type="text" id="newModelNamespace" value="https://voorbeeld.nl/model#">
+        </div>
+        <div class="add-prop-row">
+          <div class="add-prop-label">Bestandsnaam</div>
+          <input type="text" id="newModelFilename" value="nieuw-model.ttl">
+        </div>
+        <div class="add-prop-error" id="newModelError"></div>
+        <div class="add-prop-actions">
+          <button type="button" class="btn primary" id="newModelSubmit">Model aanmaken</button>
+          <button type="button" class="rel-picker-cancel" id="newModelCancel">Annuleren</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('newModelCancel').addEventListener('click', () => {
+    if(model) renderApp();
+    else { app.innerHTML = ''; app.appendChild(emptyState); }
+  });
+  document.getElementById('newModelSubmit').addEventListener('click', () => {
+    const errorEl = document.getElementById('newModelError');
+    errorEl.textContent = '';
+    const prefix = document.getElementById('newModelPrefix').value.trim();
+    const ns = document.getElementById('newModelNamespace').value.trim();
+    const filename = document.getElementById('newModelFilename').value.trim() || 'nieuw-model.ttl';
+    if(!prefix || !/^[A-Za-z][\w-]*$/.test(prefix)){ errorEl.textContent = 'Vul een geldige prefix in (letters/cijfers, begint met een letter).'; return; }
+    if(['rdf','rdfs','owl','xsd'].includes(prefix)){ errorEl.textContent = 'Deze prefix is gereserveerd voor een standaardnamespace — kies een andere.'; return; }
+    if(!ns || !/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(ns)){ errorEl.textContent = 'Vul een geldige namespace-URI in (bv. https://…).'; return; }
+    createNewModel(prefix, ns, filename);
+  });
+  document.getElementById('newModelPrefix').focus();
+}
+
+function createNewModel(prefix, namespace, filename){
+  const parsed = {prefixes: {rdf:RDF, rdfs:RDFS, owl:OWL, xsd:XSD, [prefix]:namespace}, triples: []};
+  model = buildModel(parsed);
+  currentTab = 'classes';
+  selectedId = null;
+  searchQuery = '';
+  hasUnsavedChanges = false;
+  allResourceOptions = [];
+  allPropertyOptions = [];
+  allClassOptions = [];
+  fileNameEl.textContent = filename;
+  statusEl.textContent = '0 triples — nieuw model';
+  statusEl.className = '';
+  downloadBtn.style.display = 'inline-block';
+  prefixBtn.style.display = 'inline-block';
+  updateDownloadState();
+  renderApp();
+}
+
+function loadFile(file){
+  fileNameEl.textContent = file.name;
+  statusEl.textContent = 'Laden…';
+  statusEl.className = '';
+  const reader = new FileReader();
+  reader.onload = () => {
+    try{
+      const parsed = parseTurtle(stripBOM(reader.result));
+      const built = buildModel(parsed);
+      model = built;
+      statusEl.textContent = model.tripleCount + ' triples geladen';
+      statusEl.className = '';
+      currentTab = model.classes.length ? 'classes' : (model.individuals.length ? 'individuals' : 'properties');
+      selectedId = null;
+      searchQuery = '';
+      hasUnsavedChanges = false;
+      allResourceOptions = Object.keys(model.nodes)
+        .map(u => {
+          const lbl = model.labelOf(u);
+          const cur = model.curie(u);
+          return {uri:u, label:lbl, curie:cur, searchText:(lbl+' '+cur+' '+u).toLowerCase()};
+        });
+      allPropertyOptions = model.properties.map(u => {
+        const lbl = model.labelOf(u);
+        const cur = model.curie(u);
+        return {uri:u, label:lbl, curie:cur, searchText:(lbl+' '+cur+' '+u).toLowerCase()};
+      });
+      allClassOptions = model.classes.map(u => {
+        const lbl = model.labelOf(u);
+        const cur = model.curie(u);
+        return {uri:u, label:lbl, curie:cur, searchText:(lbl+' '+cur+' '+u).toLowerCase()};
+      });
+downloadBtn.style.display = 'inline-block';
+    prefixBtn.style.display = 'inline-block';
+    updateDownloadState();
+    renderApp();
+  }catch(err){
+      statusEl.textContent = 'Fout: ' + err.message;
+      statusEl.className = 'error';
+      console.error(err);
+      showLoadError(err.message);
+    }
+  };
+  reader.onerror = () => {
+    statusEl.textContent = 'Kon bestand niet lezen';
+    statusEl.className = 'error';
+    showLoadError('De browser kon het bestand niet lezen (' + (reader.error ? reader.error.name : 'onbekende fout') + ').');
+  };
+  reader.readAsText(file);
+}
+
+function esc(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function renderApp(){
+  if(!model){
+    app.innerHTML = '';
+    app.appendChild(emptyState);
+    return;
+  }
+
+  const relProps = model.properties.filter(p => model.propKind[p] === 'relatie');
+  const dataProps = model.properties.filter(p => model.propKind[p] === 'eigenschap');
+
+  const tabsDef = [
+    {key:'classes', label:'Klassen', items: model.classes},
+    {key:'dataprops', label:'Eigenschappen', items: dataProps},
+    {key:'relprops', label:'Relaties', items: relProps},
+    {key:'individuals', label:'Instanties', items: model.individuals},
+  ];
+
+  app.innerHTML = `
+    <div class="sidebar">
+      <div class="tabs">
+        ${tabsDef.map(t => `
+          <button class="tab ${currentTab===t.key?'active':''}" data-tab="${t.key}">
+            ${t.label}<span class="count">${t.items.length}</span>
+          </button>`).join('')}
+      </div>
+      <div class="search-box">
+        <input type="text" id="searchInput" placeholder="Zoeken…" value="${esc(searchQuery)}">
+      </div>
+      ${currentTab === 'classes' ? '<div class="sidebar-toolbar"><button type="button" class="btn sidebar-add-btn" id="addClassBtn">+ Nieuwe klasse</button></div>' : ''}
+      ${currentTab === 'individuals' ? '<div class="sidebar-toolbar"><button type="button" class="btn sidebar-add-btn" id="addIndividualBtn">+ Nieuwe instantie</button></div>' : ''}
+      <div class="sidebar-form-area" id="sidebarFormArea"></div>
+      <div class="list" id="listEl"></div>
+    </div>
+    <div class="detail" id="detailEl"></div>
+  `;
+
+  app.querySelectorAll('.tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      currentTab = btn.dataset.tab;
+      selectedId = null;
+      renderApp();
+    });
+  });
+
+  const searchInput = document.getElementById('searchInput');
+  searchInput.addEventListener('input', () => {
+    searchQuery = searchInput.value;
+    renderList();
+  });
+  searchInput.focus();
+  searchInput.value = searchQuery;
+  searchInput.selectionStart = searchInput.selectionEnd = searchQuery.length;
+
+  const addClassBtn = document.getElementById('addClassBtn');
+  if(addClassBtn) addClassBtn.addEventListener('click', openCreateClassForm);
+  const addIndividualBtn = document.getElementById('addIndividualBtn');
+  if(addIndividualBtn) addIndividualBtn.addEventListener('click', openCreateIndividualForm);
+
+  renderList();
+  renderDetail();
+}
+
+function currentItems(){
+  const relProps = model.properties.filter(p => model.propKind[p] === 'relatie');
+  const dataProps = model.properties.filter(p => model.propKind[p] === 'eigenschap');
+  if(currentTab === 'classes') return model.classes;
+  if(currentTab === 'dataprops') return dataProps;
+  if(currentTab === 'relprops') return relProps;
+  if(currentTab === 'individuals') return model.individuals;
+  return [];
+}
+
+function renderList(){
+  const listEl = document.getElementById('listEl');
+  if(!listEl) return;
+  let items = currentItems();
+  const q = searchQuery.trim().toLowerCase();
+  if(q){
+    items = items.filter(uri => model.labelOf(uri).toLowerCase().includes(q) || uri.toLowerCase().includes(q) || model.curie(uri).toLowerCase().includes(q));
+  }
+
+  if(items.length === 0){
+    listEl.innerHTML = '<div class="list-empty">Geen resultaten</div>';
+    return;
+  }
+
+  if(currentTab === 'individuals' && !q){
+    // group individuals by type
+    const groups = {};
+    items.forEach(uri => {
+      const node = model.nodes[uri];
+      const types = node ? [...node.types].filter(t => !isCoreURI(t)) : [];
+      const key = types.length ? types.map(t => model.labelOf(t)).sort().join(', ') : 'Overig';
+      if(!groups[key]) groups[key] = [];
+      groups[key].push(uri);
+    });
+    const sortedKeys = Object.keys(groups).sort();
+    listEl.innerHTML = sortedKeys.map(key => `
+      <div class="list-group-label">${esc(key)} (${groups[key].length})</div>
+      ${groups[key].map(itemHtml).join('')}
+    `).join('');
+  } else {
+    listEl.innerHTML = items.map(itemHtml).join('');
+  }
+
+  listEl.querySelectorAll('.list-item').forEach(el => {
+    el.addEventListener('click', () => {
+      selectedId = el.dataset.uri;
+      renderDetail();
+      listEl.querySelectorAll('.list-item').forEach(x => x.classList.remove('selected'));
+      el.classList.add('selected');
+    });
+  });
+}
+
+function itemHtml(uri){
+  const label = model.propKind[uri] ? model.rawLabelOf(uri) : model.labelOf(uri);
+  const sub = model.curie(uri);
+  const sel = uri === selectedId ? 'selected' : '';
+  return `<div class="list-item ${sel}" data-uri="${esc(uri)}">
+    <span class="label">${esc(label)}</span>
+    <span class="sub">${esc(sub)}</span>
+  </div>`;
+}
+
+function kindLabelFor(uri){
+  if(model.classes.includes(uri)) return 'Klasse';
+  if(model.propKind[uri] === 'relatie') return 'Relatie';
+  if(model.propKind[uri] === 'eigenschap') return 'Eigenschap';
+  return 'Instantie';
+}
+
+function propertiesForClass(classUri){
+  const skip = new Set(LABEL_PREDS.concat(DESC_PREDS));
+  const predCounts = {};
+  Object.values(model.nodes).forEach(n => {
+    if(n.types && n.types.has(classUri)){
+      n.out.forEach(({p}) => {
+        if(p === RDF+'type' || skip.has(p)) return;
+        predCounts[p] = (predCounts[p] || 0) + 1;
+      });
+    }
+  });
+  // also include properties that explicitly declare this class as their rdfs:domain
+  model.properties.forEach(propUri => {
+    const propNode = model.nodes[propUri];
+    if(propNode){
+      const hasDomain = propNode.out.some(o => o.p === RDFS+'domain' && o.o.type === 'uri' && o.o.value === classUri);
+      if(hasDomain && !(propUri in predCounts)) predCounts[propUri] = 0;
+    }
+  });
+  return Object.keys(predCounts)
+    .map(p => ({uri:p, count:predCounts[p]}))
+    .sort((a,b) => model.labelOf(a.uri).localeCompare(model.labelOf(b.uri)));
+}
+
+function instancesOfClass(classUri){
+  const result = [];
+  Object.keys(model.nodes).forEach(uri => {
+    const n = model.nodes[uri];
+    if(n.types && n.types.has(classUri)) result.push(uri);
+  });
+  return result.sort((a,b) => model.labelOf(a).localeCompare(model.labelOf(b)));
+}
+
+function navigateTo(uri){
+  if(model.classes.includes(uri)) currentTab = 'classes';
+  else if(model.propKind[uri] === 'relatie') currentTab = 'relprops';
+  else if(model.propKind[uri] === 'eigenschap') currentTab = 'dataprops';
+  else currentTab = 'individuals';
+  selectedId = uri;
+  searchQuery = '';
+  renderApp();
+  const sel = document.querySelector(`.list-item[data-uri="${cssEscape(uri)}"]`);
+  if(sel) sel.scrollIntoView({block:'nearest'});
+}
+
+function cssEscape(s){
+  return s.replace(/["\\]/g, '\\$&');
+}
+
+let currentEditableTerms = [];
+let currentEditableLangs = [];
+let currentEditableRels = [];
+let currentDeletables = [];
+let hasUnsavedChanges = false;
+let lastScrollTop = 0;
+
+function renderDetail(){
+  const detailEl = document.getElementById('detailEl');
+  if(!detailEl) return;
+  currentEditableTerms = [];
+  currentEditableLangs = [];
+  currentEditableRels = [];
+  currentDeletables = [];
+  if(!selectedId){
+    detailEl.innerHTML = '<div class="detail-empty">Selecteer een item in de lijst om details te bekijken.<br>Waarden zijn direct te bewerken door erop te klikken.</div>';
+    return;
+  }
+  const uri = selectedId;
+  const node = model.nodes[uri];
+  const kind = kindLabelFor(uri);
+
+  let html = `<div class="detail-kind">${esc(kind)}</div>`;
+  let headingLabel = null;
+  let headingPred = null;
+  let headingTerm = null;
+  if(node){
+    const prefLabel = node.out.find(o => o.p === SKOS+'prefLabel' && o.o.type==='literal');
+    if(prefLabel){
+      headingLabel = prefLabel.o.value;
+      headingPred = 'skos:prefLabel';
+      headingTerm = prefLabel.o;
+    }
+  }
+  if(!headingTerm){
+    const rdfsLabel = node ? node.out.find(o => o.p === RDFS+'label' && o.o.type==='literal') : null;
+    if(rdfsLabel){
+      headingLabel = rdfsLabel.o.value;
+      headingPred = 'rdfs:label';
+      headingTerm = rdfsLabel.o;
+    }
+  }
+  if(headingTerm){
+    const idx = currentEditableTerms.length;
+    currentEditableTerms.push(headingTerm);
+    let headingHtml = `<h2 class="editable-title" contenteditable="true" spellcheck="false" data-eidx="${idx}">${esc(headingLabel)}</h2>`;
+    if(headingPred){
+      headingHtml += `<span class="detail-label-pred">${esc(headingPred)}</span>`;
+    }
+    html += `<div class="detail-heading">${headingHtml}</div>`;
+  } else {
+    html += `<h2 class="resource-title">${esc(model.rawLabelOf(uri))}</h2>`;
+  }
+  const cur = model.curie(uri);
+  html += cur !== uri
+    ? `<div class="uri">${esc(cur)} · ${esc(uri)}</div>`
+    : `<div class="uri">${esc(uri)}</div>`;
+
+  if(kind === 'Klasse'){
+    const classProps = propertiesForClass(uri);
+    if(classProps.length){
+      html += '<div class="section-title">Eigenschappen en relaties</div>';
+      html += '<div class="prop-table">';
+      classProps.forEach(cp => {
+        const kindTag = model.propKind[cp.uri] === 'relatie' ? 'Relatie' : 'Eigenschap';
+        html += `<div class="prop-row">
+          <div class="pname"><a class="pval-link schema-link" data-uri="${esc(cp.uri)}">${esc(model.rawLabelOf(cp.uri))}</a><span class="puri">${esc(model.curie(cp.uri))}</span></div>
+          <div class="pvals"><span class="schema-kind">${esc(kindTag)}</span><span class="schema-count">${cp.count ? cp.count + '× gebruikt in dit bestand' : 'domein-declaratie, nog niet gebruikt'}</span></div>
+        </div>`;
+      });
+      html += '</div>';
+    }
+
+    const instances = instancesOfClass(uri);
+    if(instances.length){
+      html += `<div class="section-title">Instanties (${instances.length})</div>`;
+      html += '<div class="instance-grid">';
+      instances.forEach(iuri => {
+        html += `<a class="instance-chip pval-link schema-link" data-uri="${esc(iuri)}"><span class="label">${esc(model.labelOf(iuri))}</span><span class="sub">${esc(model.curie(iuri))}</span></a>`;
+      });
+      html += '</div>';
+    }
+  }
+
+  if(node){
+    const skipPreds = new Set();
+    const grouped = {};
+    node.out.forEach(({p,o}) => {
+      if(skipPreds.has(p)) return;
+      if(!grouped[p]) grouped[p] = [];
+      grouped[p].push(o);
+    });
+
+    const predKeys = Object.keys(grouped).sort((a,b) => model.labelOf(a).localeCompare(model.labelOf(b)));
+    if(predKeys.length){
+      if(kind === 'Klasse') html += '<div class="section-title">Kenmerken van deze klasse</div>';
+      html += '<div class="prop-table">';
+      predKeys.forEach(p => {
+        html += `<div class="prop-row">
+          <div class="pname">${esc(model.rawLabelOf(p))}<span class="puri">${esc(model.curie(p))}</span></div>
+          <div class="pvals">${grouped[p].map(o => valHtml(o, true, uri, p)).join('')}</div>
+        </div>`;
+      });
+      html += '</div>';
+    }
+
+    // incoming links (referenced by)
+    const incomingSkip = new Set(skipPreds);
+    if(kind === 'Klasse') incomingSkip.add(RDF+'type'); // shown separately under "Instanties"
+    const incoming = node.in.filter(({p}) => !incomingSkip.has(p));
+    if(incoming.length){
+      const groupedIn = {};
+      incoming.forEach(({p,s}) => {
+        if(!groupedIn[p]) groupedIn[p] = [];
+        groupedIn[p].push(s);
+      });
+      html += '<div class="section-title">Gebruikt door</div>';
+      html += '<div class="prop-table">';
+      Object.keys(groupedIn).sort((a,b)=>model.labelOf(a).localeCompare(model.labelOf(b))).forEach(p => {
+        html += `<div class="prop-row">
+          <div class="pname">${esc(model.rawLabelOf(p))}<span class="puri">${esc(model.curie(p))}</span></div>
+          <div class="pvals">${groupedIn[p].map(s => valHtml(s, false)).join('')}</div>
+        </div>`;
+      });
+      html += '</div>';
+    }
+  }
+
+  html += `<button type="button" class="btn add-prop-btn" id="addPropBtn">+ Eigenschap of relatie toevoegen</button>`;
+
+  if(kind === 'Klasse' || kind === 'Instantie'){
+    html += `<div><button type="button" class="danger-btn" id="deleteResourceBtn">${kind === 'Klasse' ? 'Verwijder deze klasse' : 'Verwijder deze instantie'}</button></div>`;
+  }
+
+  detailEl.innerHTML = html;
+  detailEl.scrollTop = lastScrollTop;
+  detailEl.querySelectorAll('.pval-link').forEach(el => {
+    el.addEventListener('click', () => navigateTo(el.dataset.uri));
+  });
+  detailEl.querySelectorAll('[data-eidx]').forEach(el => {
+    el.addEventListener('blur', () => commitEdit(el));
+    el.addEventListener('keydown', e => {
+      if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); el.blur(); }
+      else if(e.key === 'Escape'){ el.blur(); }
+    });
+  });
+  detailEl.querySelectorAll('.rel-edit-btn').forEach(el => {
+    el.addEventListener('click', () => openRelPicker(el.dataset.relidx));
+  });
+  detailEl.querySelectorAll('.lang-edit').forEach(el => {
+    el.addEventListener('change', () => commitLang(el));
+  });
+  detailEl.querySelectorAll('.val-delete-btn').forEach(el => {
+    el.addEventListener('click', () => {
+      const info = currentDeletables[parseInt(el.dataset.delidx, 10)];
+      if(info) deleteTripleValue(info.subjectUri, info.predicateUri, info.term);
+    });
+  });
+  const addBtn = detailEl.querySelector('#addPropBtn');
+  if(addBtn) addBtn.addEventListener('click', () => openAddPropertyForm(uri));
+  const delResBtn = detailEl.querySelector('#deleteResourceBtn');
+  if(delResBtn) delResBtn.addEventListener('click', () => {
+    const lbl = model.labelOf(uri);
+    const what = kind === 'Klasse' ? 'klasse' : 'instantie';
+    if(confirm(`Weet je zeker dat je de ${what} "${lbl}" wilt verwijderen? Alle eigenschappen en relaties van dit item verdwijnen, en verwijzingen ernaartoe worden ontkoppeld.`)){
+      deleteResource(uri);
+      hasUnsavedChanges = true;
+      updateDownloadState();
+      selectedId = null;
+      renderApp();
+    }
+  });
+}
+
+function commitEdit(el){
+  const idx = parseInt(el.dataset.eidx, 10);
+  const term = currentEditableTerms[idx];
+  if(!term) return;
+  const newVal = el.innerText.replace(/\n+$/,'');
+  if(newVal === term.value) return;
+  term.value = newVal;
+  hasUnsavedChanges = true;
+  updateDownloadState();
+  const detailEl = document.getElementById('detailEl');
+  lastScrollTop = detailEl ? detailEl.scrollTop : 0;
+  renderList();
+  renderDetail();
+}
+
+function commitLang(el){
+  const idx = parseInt(el.dataset.lidx, 10);
+  const term = currentEditableLangs[idx];
+  if(!term) return;
+  const newLang = el.value;
+  const oldLang = term.lang || '';
+  if(newLang === oldLang) return;
+  if(newLang){
+    term.lang = newLang;
+    delete term.datatype;
+  } else {
+    delete term.lang;
+    term.datatype = XSD+'string';
+  }
+  hasUnsavedChanges = true;
+  updateDownloadState();
+  const detailEl = document.getElementById('detailEl');
+  lastScrollTop = detailEl ? detailEl.scrollTop : 0;
+  renderList();
+  renderDetail();
+}
+
+function updateDownloadState(){
+  downloadBtn.textContent = hasUnsavedChanges ? 'Download gewijzigd bestand •' : 'Download bestand';
+}
+
+let prefixWorking = [];
+
+function rebuildOptions(){
+  allResourceOptions = Object.keys(model.nodes)
+    .map(u => {
+      const lbl = model.labelOf(u);
+      const cur = model.curie(u);
+      return {uri:u, label:lbl, curie:cur, searchText:(lbl+' '+cur+' '+u).toLowerCase()};
+    });
+  allPropertyOptions = model.properties.map(u => {
+    const lbl = model.labelOf(u);
+    const cur = model.curie(u);
+    return {uri:u, label:lbl, curie:cur, searchText:(lbl+' '+cur+' '+u).toLowerCase()};
+  });
+  allClassOptions = model.classes.map(u => {
+    const lbl = model.labelOf(u);
+    const cur = model.curie(u);
+    return {uri:u, label:lbl, curie:cur, searchText:(lbl+' '+cur+' '+u).toLowerCase()};
+  });
+}
+
+function openPrefixManager(){
+  if(!model) return;
+  prefixWorking = Object.keys(model.prefixes).map(p => ({name:p, ns:model.prefixes[p]}));
+  renderPrefixRows();
+  document.getElementById('prefixOverlay').style.display = 'flex';
+  document.getElementById('prefixError').textContent = '';
+}
+
+function renderPrefixRows(){
+  const listEl = document.getElementById('prefixList');
+  listEl.innerHTML = prefixWorking.map((r,i) => `
+    <div class="prefix-row">
+      <input type="text" class="prefix-name" data-idx="${i}" placeholder="prefix" value="${esc(r.name)}" spellcheck="false">
+      <input type="text" class="prefix-ns" data-idx="${i}" placeholder="https://…/namespace#" value="${esc(r.ns)}" spellcheck="false">
+      <button type="button" class="val-delete-btn" data-idx="${i}" title="Verwijder deze prefix">×</button>
+    </div>`).join('');
+  listEl.querySelectorAll('.prefix-name').forEach(inp => {
+    inp.addEventListener('input', () => { prefixWorking[parseInt(inp.dataset.idx,10)].name = inp.value; });
+  });
+  listEl.querySelectorAll('.prefix-ns').forEach(inp => {
+    inp.addEventListener('input', () => { prefixWorking[parseInt(inp.dataset.idx,10)].ns = inp.value; });
+  });
+  listEl.querySelectorAll('.val-delete-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      prefixWorking.splice(parseInt(btn.dataset.idx,10), 1);
+      renderPrefixRows();
+    });
+  });
+  document.getElementById('prefixError').textContent = '';
+}
+
+function closePrefixManager(){
+  document.getElementById('prefixOverlay').style.display = 'none';
+}
+
+function savePrefixes(){
+  const errorEl = document.getElementById('prefixError');
+  errorEl.textContent = '';
+  const seen = {};
+  for(const r of prefixWorking){
+    const name = r.name.trim();
+    const ns = r.ns.trim();
+    if(name !== '' && !/^[A-Za-z][A-Za-z0-9\-_.]*$/.test(name)){
+      errorEl.textContent = 'Ongeldige prefix "' + name + '". Gebruik alleen letters, cijfers, - _ . en begin met een letter.'; return;
+    }
+    if(Object.prototype.hasOwnProperty.call(seen, name)){
+      errorEl.textContent = 'Prefix "' + name + '" komt twee keer voor.'; return;
+    }
+    seen[name] = true;
+    if(!ns){
+      errorEl.textContent = 'Vul voor elke prefix een namespace-URI in.'; return;
+    }
+    if(!/^[a-zA-Z][a-zA-Z0-9+.\-]*:/.test(ns)){
+      errorEl.textContent = 'Ongeldige namespace-URI voor prefix "' + name + '".'; return;
+    }
+  }
+  const newPrefixes = {};
+  prefixWorking.forEach(r => { newPrefixes[r.name.trim()] = r.ns.trim(); });
+  Object.keys(model.prefixes).forEach(k => delete model.prefixes[k]);
+  Object.assign(model.prefixes, newPrefixes);
+  model.invPrefixes = {};
+  Object.keys(model.prefixes).forEach(p => { model.invPrefixes[model.prefixes[p]] = p; });
+  rebuildOptions();
+  hasUnsavedChanges = true;
+  updateDownloadState();
+  closePrefixManager();
+  renderApp();
+}
+
+function valHtml(term, editable, subjectUri, predicateUri){
+  if(term.type === 'literal'){
+    let extra = '';
+    if(editable && (term.lang || !term.datatype || term.datatype === XSD+'string')){
+      const langIdx = currentEditableLangs.length;
+      currentEditableLangs.push(term);
+      const current = term.lang || '';
+      const common = [['','geen taal'],['nl','@nl'],['en','@en'],['de','@de'],['fr','@fr'],['es','@es'],['it','@it'],['pt','@pt'],['fy','@fy'],['lb','@lb'],['li','@li']];
+      let options = common.map(([v,label]) => `<option value="${esc(v)}"${v===current?' selected':''}>${esc(label)}</option>`).join('');
+      if(current && !common.some(([v]) => v === current)){
+        options += `<option value="${esc(current)}" selected>@${esc(current)}</option>`;
+      }
+      extra = `<select class="lang-edit" data-lidx="${langIdx}" title="Taal van deze tekst wijzigen">${options}</select>`;
+    }
+    else if(term.lang) extra = `<span class="lang-tag">@${esc(term.lang)}</span>`;
+    else if(term.datatype && term.datatype !== XSD+'string') extra = `<span class="lang-tag">${esc(model.curie(term.datatype))}</span>`;
+    const isDesc = predicateUri && DESC_PREDS.includes(predicateUri);
+    const valClass = isDesc ? 'pval pval-description' : 'pval';
+    if(editable){
+      const idx = currentEditableTerms.length;
+      currentEditableTerms.push(term);
+      const delIdx = currentDeletables.length;
+      currentDeletables.push({term, subjectUri, predicateUri});
+      return `<div class="pval-wrap"><div class="${valClass} pval-editable" contenteditable="true" spellcheck="false" data-eidx="${idx}">${esc(term.value)}</div>${extra}<button type="button" class="val-delete-btn" data-delidx="${delIdx}" title="Verwijder deze waarde">×</button></div>`;
+    }
+    return `<div class="${valClass}">${esc(term.value)}${extra}</div>`;
+  }
+  const uri = term.value;
+  const label = model.labelOf(uri);
+  const linkHtml = `<a class="pval-link" data-uri="${esc(uri)}">${esc(label)}<span class="pv-uri">${esc(model.curie(uri))}</span></a>`;
+  if(editable && term.type === 'uri'){
+    const relIdx = currentEditableRels.length;
+    currentEditableRels.push({term, subjectUri, predicateUri});
+    const delIdx = currentDeletables.length;
+    currentDeletables.push({term, subjectUri, predicateUri});
+    return `<div class="rel-wrap" data-relidx="${relIdx}">${linkHtml}<button type="button" class="rel-edit-btn" data-relidx="${relIdx}" title="Wijzig verwijzing">✎</button><button type="button" class="val-delete-btn" data-delidx="${delIdx}" title="Verwijder deze relatie">×</button></div>`;
+  }
+  return linkHtml;
+}
+
+function removeIncoming(targetUri, predicateUri, subjectUri){
+  const targetNode = model.nodes[targetUri];
+  if(!targetNode) return;
+  const idx = targetNode.in.findIndex(e => e.p === predicateUri && e.s && e.s.value === subjectUri);
+  if(idx >= 0) targetNode.in.splice(idx, 1);
+}
+
+function addIncoming(targetUri, predicateUri, subjectUri){
+  let targetNode = model.nodes[targetUri];
+  if(!targetNode){
+    targetNode = {id:targetUri, isBnode:targetUri.indexOf('_:') === 0, out:[], in:[], types:new Set()};
+    model.nodes[targetUri] = targetNode;
+  }
+  targetNode.in.push({p:predicateUri, s:{type: subjectUri.indexOf('_:') === 0 ? 'bnode' : 'uri', value:subjectUri}});
+}
+
+function resolveTypedInput(raw){
+  raw = raw.trim();
+  if(!raw) return null;
+  if(raw.indexOf('://') !== -1 || /^urn:/i.test(raw)) return raw;
+  if(/^_:[A-Za-z][\w.-]*$/.test(raw) && model.nodes[raw] && model.nodes[raw].isBnode) return raw;
+  const m = raw.match(/^([A-Za-z][\w-]*)?:(.+)$/);
+  if(m){
+    const prefix = m[1] || '';
+    const local = m[2];
+    if(model.prefixes[prefix] !== undefined && local.indexOf(' ') === -1) return model.prefixes[prefix] + local;
+  }
+  return null;
+}
+
+function renderRelOptions(query, listEl, relIdx){
+  const q = query.trim().toLowerCase();
+  if(!q){
+    listEl.innerHTML = '<div class="rel-option-empty">Begin met typen om te zoeken, of plak een volledige URI of verkorte naam.</div>';
+    return;
+  }
+  const matches = [];
+  for(const opt of allResourceOptions){
+    if(opt.searchText.indexOf(q) !== -1){
+      matches.push(opt);
+      if(matches.length >= 8) break;
+    }
+  }
+  if(!matches.length){
+    listEl.innerHTML = '<div class="rel-option-empty">Geen overeenkomsten. Druk op Enter om de getypte URI of verkorte naam te gebruiken.</div>';
+    return;
+  }
+  listEl.innerHTML = matches.map(o => `<div class="rel-option" data-uri="${esc(o.uri)}"><span class="label">${esc(o.label)}</span><span class="sub">${esc(o.curie)}</span></div>`).join('');
+  listEl.querySelectorAll('.rel-option').forEach(el => {
+    el.addEventListener('mousedown', ev => { ev.preventDefault(); commitRelation(relIdx, el.dataset.uri); });
+  });
+}
+
+function openRelPicker(relIdx){
+  const detailEl = document.getElementById('detailEl');
+  const wrap = detailEl.querySelector(`.rel-wrap[data-relidx="${relIdx}"]`);
+  if(!wrap) return;
+  wrap.innerHTML = `
+    <div class="rel-picker">
+      <input type="text" class="rel-picker-input" placeholder="Zoek op naam, of plak een URI of verkorte naam…" autocomplete="off">
+      <div class="rel-picker-list"></div>
+      <button type="button" class="rel-picker-cancel">Annuleren</button>
+    </div>`;
+  const input = wrap.querySelector('.rel-picker-input');
+  const list = wrap.querySelector('.rel-picker-list');
+  renderRelOptions('', list, relIdx);
+  input.addEventListener('input', () => { input.classList.remove('invalid'); renderRelOptions(input.value, list, relIdx); });
+  input.addEventListener('keydown', e => {
+    if(e.key === 'Enter'){
+      e.preventDefault();
+      const q = input.value.trim();
+      if(!q) return;
+      const first = list.querySelector('.rel-option[data-uri]');
+      if(first){ commitRelation(relIdx, first.dataset.uri); return; }
+      const resolved = resolveTypedInput(q);
+      if(resolved) commitRelation(relIdx, resolved);
+      else input.classList.add('invalid');
+    } else if(e.key === 'Escape'){
+      renderDetail();
+    }
+  });
+  wrap.querySelector('.rel-picker-cancel').addEventListener('click', () => renderDetail());
+  input.focus();
+}
+
+function commitRelation(relIdx, newUri){
+  const info = currentEditableRels[relIdx];
+  if(!info) return;
+  const term = info.term;
+  const oldUri = term.value;
+  if(newUri !== oldUri){
+    removeIncoming(oldUri, info.predicateUri, info.subjectUri);
+    term.value = newUri;
+    term.type = (model.nodes[newUri] && model.nodes[newUri].isBnode) ? 'bnode' : 'uri';
+    addIncoming(newUri, info.predicateUri, info.subjectUri);
+    hasUnsavedChanges = true;
+    updateDownloadState();
+  }
+  const detailEl = document.getElementById('detailEl');
+  lastScrollTop = detailEl ? detailEl.scrollTop : 0;
+  renderList();
+  renderDetail();
+}
+
+function deleteTripleValue(subjectUri, predicateUri, term){
+  const idx = model.triples.findIndex(t => t.o === term);
+  if(idx >= 0) model.triples.splice(idx, 1);
+  const subjNode = model.nodes[subjectUri];
+  if(subjNode){
+    const oidx = subjNode.out.findIndex(e => e.o === term);
+    if(oidx >= 0) subjNode.out.splice(oidx, 1);
+    if(predicateUri === RDF+'type' && term.type === 'uri') subjNode.types.delete(term.value);
+  }
+  if(term.type === 'uri') removeIncoming(term.value, predicateUri, subjectUri);
+  hasUnsavedChanges = true;
+  updateDownloadState();
+  const detailEl = document.getElementById('detailEl');
+  lastScrollTop = detailEl ? detailEl.scrollTop : 0;
+  renderApp();
+}
+
+function refreshResourceOptionsFor(u){
+  if(!allResourceOptions.some(o => o.uri === u)){
+    allResourceOptions.push({uri:u, label:model.labelOf(u), curie:model.curie(u), searchText:(model.labelOf(u)+' '+model.curie(u)+' '+u).toLowerCase()});
+  }
+}
+
+function renderOptionList(listEl, options, query, onPick){
+  const q = query.trim().toLowerCase();
+  if(!q){ listEl.innerHTML = '<div class="rel-option-empty">Begin met typen om te zoeken, of plak een volledige URI of verkorte naam.</div>'; return; }
+  const matches = [];
+  for(const opt of options){
+    if(opt.searchText.indexOf(q) !== -1){ matches.push(opt); if(matches.length >= 8) break; }
+  }
+  if(!matches.length){ listEl.innerHTML = '<div class="rel-option-empty">Geen overeenkomsten. Plak een volledige URI of verkorte naam om een nieuwe waarde te gebruiken.</div>'; return; }
+  listEl.innerHTML = matches.map(o => `<div class="rel-option" data-uri="${esc(o.uri)}"><span class="label">${esc(o.label)}</span><span class="sub">${esc(o.curie)}</span></div>`).join('');
+  listEl.querySelectorAll('.rel-option').forEach(el => {
+    el.addEventListener('mousedown', ev => { ev.preventDefault(); onPick(el.dataset.uri); });
+  });
+}
+
+function slugify(text){
+  return text.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9]+/g,'-').replace(/(^-+|-+$)/g,'');
+}
+
+function defaultLocalPrefix(){
+  const core = new Set(['rdf','rdfs','owl','xsd','shacl','sh','dcat','dct','dc','skos']);
+  const names = Object.keys(model.prefixes);
+  const candidate = names.find(n => n && !core.has(n));
+  return candidate !== undefined ? candidate : (names.find(n => n) || '');
+}
+
+function suggestCurieFromLabel(label){
+  const slug = slugify(label);
+  if(!slug) return '';
+  const prefix = defaultLocalPrefix();
+  return prefix ? prefix + ':' + slug : slug;
+}
+
+function addTripleValueRaw(subjectUri, predicateUri, objTerm){
+  const isBnodeSubject = subjectUri.indexOf('_:') === 0;
+  const subjTerm = isBnodeSubject ? {type:'bnode', value:subjectUri} : {type:'uri', value:subjectUri};
+  const predTerm = {type:'uri', value:predicateUri};
+  model.triples.push({s:subjTerm, p:predTerm, o:objTerm});
+  let subjNode = model.nodes[subjectUri];
+  if(!subjNode){
+    subjNode = {id:subjectUri, isBnode:isBnodeSubject, out:[], in:[], types:new Set()};
+    model.nodes[subjectUri] = subjNode;
+  } else if(subjNode.isBnode !== isBnodeSubject){
+    subjNode.isBnode = isBnodeSubject;
+  }
+  subjNode.out.push({p:predicateUri, o:objTerm});
+  if(objTerm.type === 'uri' || objTerm.type === 'bnode'){
+    addIncoming(objTerm.value, predicateUri, subjectUri);
+    if(predicateUri === RDF+'type') subjNode.types.add(objTerm.value);
+  }
+  if(predicateUri !== RDF+'type' && !isCoreURI(predicateUri) && !(predicateUri in model.propKind)){
+    model.propKind[predicateUri] = objTerm.type === 'uri' ? 'relatie' : 'eigenschap';
+    model.properties.push(predicateUri);
+    model.properties.sort((a,b) => model.labelOf(a).localeCompare(model.labelOf(b)));
+    const lbl = model.labelOf(predicateUri), cur = model.curie(predicateUri);
+    allPropertyOptions.push({uri:predicateUri, label:lbl, curie:cur, searchText:(lbl+' '+cur+' '+predicateUri).toLowerCase()});
+  }
+  refreshResourceOptionsFor(subjectUri);
+  if(objTerm.type === 'uri') refreshResourceOptionsFor(objTerm.value);
+}
+
+function addTripleValue(subjectUri, predicateUri, objTerm){
+  addTripleValueRaw(subjectUri, predicateUri, objTerm);
+  hasUnsavedChanges = true;
+  updateDownloadState();
+  selectedId = subjectUri;
+  const detailEl = document.getElementById('detailEl');
+  lastScrollTop = detailEl ? detailEl.scrollTop : 0;
+  renderApp();
+}
+
+function createClass(classUri, labelText){
+  if(labelText && labelText.trim()){
+    addTripleValueRaw(classUri, RDFS+'label', {type:'literal', value:labelText.trim(), datatype:XSD+'string'});
+  }
+  if(!model.classes.includes(classUri)){
+    addTripleValueRaw(classUri, RDF+'type', {type:'uri', value: OWL+'Class'});
+    model.classes.push(classUri);
+    const lbl = model.labelOf(classUri), cur = model.curie(classUri);
+    allClassOptions.push({uri:classUri, label:lbl, curie:cur, searchText:(lbl+' '+cur+' '+classUri).toLowerCase()});
+  }
+  model.classes.sort((a,b) => model.labelOf(a).localeCompare(model.labelOf(b)));
+  hasUnsavedChanges = true;
+  updateDownloadState();
+  currentTab = 'classes';
+  selectedId = classUri;
+  searchQuery = '';
+  renderApp();
+}
+
+function createIndividual(individualUri, classUri, labelText){
+  if(labelText && labelText.trim()){
+    addTripleValueRaw(individualUri, RDFS+'label', {type:'literal', value:labelText.trim(), datatype:XSD+'string'});
+  }
+  if(classUri){
+    addTripleValueRaw(individualUri, RDF+'type', {type:'uri', value:classUri});
+  }
+  if(!model.individuals.includes(individualUri)) model.individuals.push(individualUri);
+  model.individuals.sort((a,b) => model.labelOf(a).localeCompare(model.labelOf(b)));
+  hasUnsavedChanges = true;
+  updateDownloadState();
+  currentTab = 'individuals';
+  selectedId = individualUri;
+  searchQuery = '';
+  renderApp();
+}
+
+function deleteResource(uri){
+  model.triples = model.triples.filter(t => {
+    const involved = (t.s.type !== 'literal' && t.s.value === uri) || (t.o.type !== 'literal' && t.o.value === uri);
+    return !involved;
+  });
+  Object.keys(model.nodes).forEach(k => {
+    const n = model.nodes[k];
+    n.out = n.out.filter(e => !(e.o.type !== 'literal' && e.o.value === uri));
+    n.in = n.in.filter(e => !(e.s.type !== 'literal' && e.s.value === uri));
+  });
+  delete model.nodes[uri];
+  model.classes = model.classes.filter(u => u !== uri);
+  model.individuals = model.individuals.filter(u => u !== uri);
+  model.properties = model.properties.filter(u => u !== uri);
+  delete model.propKind[uri];
+  allResourceOptions = allResourceOptions.filter(o => o.uri !== uri);
+  allClassOptions = allClassOptions.filter(o => o.uri !== uri);
+  allPropertyOptions = allPropertyOptions.filter(o => o.uri !== uri);
+}
+
+function openCreateClassForm(){
+  const area = document.getElementById('sidebarFormArea');
+  if(!area) return;
+  area.innerHTML = `
+    <div class="create-form">
+      <div class="add-prop-row">
+        <div class="add-prop-label">Label</div>
+        <input type="text" class="create-label-input" placeholder="Naam van de klasse">
+      </div>
+      <div class="add-prop-row">
+        <div class="add-prop-label">URI of verkorte naam</div>
+        <input type="text" class="create-uri-input" placeholder="bv. ex:MijnKlasse">
+      </div>
+      <div class="add-prop-error"></div>
+      <div class="add-prop-actions">
+        <button type="button" class="btn primary create-submit">Aanmaken</button>
+        <button type="button" class="rel-picker-cancel create-cancel">Annuleren</button>
+      </div>
+    </div>`;
+  const labelInput = area.querySelector('.create-label-input');
+  const uriInput = area.querySelector('.create-uri-input');
+  const errorEl = area.querySelector('.add-prop-error');
+
+  labelInput.addEventListener('input', () => {
+    if(!uriInput.dataset.touched) uriInput.value = suggestCurieFromLabel(labelInput.value);
+  });
+  uriInput.addEventListener('input', () => { uriInput.dataset.touched = '1'; });
+
+  area.querySelector('.create-cancel').addEventListener('click', () => { area.innerHTML = ''; });
+  area.querySelector('.create-submit').addEventListener('click', () => {
+    errorEl.textContent = '';
+    const raw = uriInput.value.trim();
+    if(!raw){ errorEl.textContent = 'Vul een URI of verkorte naam in.'; return; }
+    const resolved = resolveTypedInput(raw) || (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(raw) ? raw : null);
+    if(!resolved){ errorEl.textContent = 'Onbekend prefix of ongeldige URI.'; return; }
+    if(model.nodes[resolved] && (model.classes.includes(resolved) || model.individuals.includes(resolved) || model.properties.includes(resolved))){
+      errorEl.textContent = 'Deze URI wordt al gebruikt door een bestaand item.'; return;
+    }
+    area.innerHTML = '';
+    createClass(resolved, labelInput.value);
+  });
+  labelInput.focus();
+}
+
+function openCreateIndividualForm(){
+  const area = document.getElementById('sidebarFormArea');
+  if(!area) return;
+  let chosenClassUri = null;
+  area.innerHTML = `
+    <div class="create-form">
+      <div class="add-prop-row">
+        <div class="add-prop-label">Label</div>
+        <input type="text" class="create-label-input" placeholder="Naam van de instantie">
+      </div>
+      <div class="add-prop-row" id="createUriRow">
+        <div class="add-prop-label">URI of verkorte naam</div>
+        <input type="text" class="create-uri-input" placeholder="bv. ex:mijn-instantie">
+      </div>
+      <div class="add-prop-row">
+        <label class="create-bnode-toggle"><input type="checkbox" id="createBnodeCb"> Blanco node (bnode) maken</label>
+      </div>
+      <div class="add-prop-row">
+        <div class="add-prop-label">Klasse (optioneel)</div>
+        <input type="text" class="create-class-input" placeholder="Zoek een klasse…" autocomplete="off">
+        <div class="rel-picker-list create-class-list"></div>
+      </div>
+      <div class="add-prop-error"></div>
+      <div class="add-prop-actions">
+        <button type="button" class="btn primary create-submit">Aanmaken</button>
+        <button type="button" class="rel-picker-cancel create-cancel">Annuleren</button>
+      </div>
+    </div>`;
+  const labelInput = area.querySelector('.create-label-input');
+  const uriInput = area.querySelector('.create-uri-input');
+  const bnodeCb = area.querySelector('#createBnodeCb');
+  const classInput = area.querySelector('.create-class-input');
+  const classList = area.querySelector('.create-class-list');
+  const errorEl = area.querySelector('.add-prop-error');
+
+  bnodeCb.addEventListener('change', () => {
+    document.getElementById('createUriRow').style.display = bnodeCb.checked ? 'none' : '';
+    uriInput.disabled = bnodeCb.checked;
+    if(bnodeCb.checked){ uriInput.value = ''; uriInput.dataset.touched = '1'; }
+  });
+
+  labelInput.addEventListener('input', () => {
+    if(!uriInput.dataset.touched) uriInput.value = suggestCurieFromLabel(labelInput.value);
+  });
+  uriInput.addEventListener('input', () => { uriInput.dataset.touched = '1'; });
+  classInput.addEventListener('input', () => {
+    chosenClassUri = null;
+    renderOptionList(classList, allClassOptions, classInput.value, (u) => {
+      chosenClassUri = u;
+      classInput.value = model.labelOf(u);
+      classList.innerHTML = '';
+    });
+  });
+
+  area.querySelector('.create-cancel').addEventListener('click', () => { area.innerHTML = ''; });
+  area.querySelector('.create-submit').addEventListener('click', () => {
+    errorEl.textContent = '';
+    let classUriFinal = null;
+    if(classInput.value.trim()){
+      classUriFinal = chosenClassUri || resolveTypedInput(classInput.value);
+      if(!classUriFinal){ errorEl.textContent = 'Onbekende klasse — kies uit de lijst of plak een geldige verkorte naam of URI.'; return; }
+    }
+    if(bnodeCb.checked){
+      area.innerHTML = '';
+      createIndividual(nextBnodeId(), classUriFinal, labelInput.value);
+      return;
+    }
+    const raw = uriInput.value.trim();
+    if(!raw){ errorEl.textContent = 'Vul een URI of verkorte naam in.'; return; }
+    const resolved = resolveTypedInput(raw) || (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(raw) ? raw : null);
+    if(!resolved){ errorEl.textContent = 'Onbekend prefix of ongeldige URI.'; return; }
+    if(model.nodes[resolved] && (model.classes.includes(resolved) || model.individuals.includes(resolved) || model.properties.includes(resolved))){
+      errorEl.textContent = 'Deze URI wordt al gebruikt door een bestaand item.'; return;
+    }
+    area.innerHTML = '';
+    createIndividual(resolved, classUriFinal, labelInput.value);
+  });
+  labelInput.focus();
+}
+
+function nextBnodeId(){
+  let n = 0;
+  while(model.nodes['_:b' + n]) n++;
+  return '_:b' + n;
+}
+
+function openAddPropertyForm(subjectUri){
+  const detailEl = document.getElementById('detailEl');
+  const btn = detailEl.querySelector('#addPropBtn');
+  if(!btn) return;
+  let chosenPredUri = null;
+  let chosenTargetUri = null;
+
+  const wrap = document.createElement('div');
+  wrap.className = 'add-prop-form';
+  wrap.innerHTML = `
+    <div class="add-prop-row">
+      <div class="add-prop-label">Eigenschap / relatie</div>
+      <input type="text" class="add-prop-pred-input" placeholder="Zoek op naam, of plak verkorte naam/URI…" autocomplete="off">
+      <div class="rel-picker-list add-prop-pred-list"></div>
+    </div>
+    <div class="add-prop-row add-prop-kind-row">
+      <label><input type="radio" name="addPropKind" value="literal" checked> Tekstwaarde</label>
+      <label><input type="radio" name="addPropKind" value="relatie"> Verwijzing naar resource</label>
+    </div>
+    <div class="add-prop-row add-prop-value-area"></div>
+    <div class="add-prop-error"></div>
+    <div class="add-prop-actions">
+      <button type="button" class="btn primary add-prop-submit">Toevoegen</button>
+      <button type="button" class="rel-picker-cancel add-prop-cancel">Annuleren</button>
+    </div>`;
+  btn.replaceWith(wrap);
+
+  const predInput = wrap.querySelector('.add-prop-pred-input');
+  const predList = wrap.querySelector('.add-prop-pred-list');
+  const valueArea = wrap.querySelector('.add-prop-value-area');
+  const errorEl = wrap.querySelector('.add-prop-error');
+
+  predInput.addEventListener('input', () => {
+    chosenPredUri = null;
+    renderOptionList(predList, allPropertyOptions, predInput.value, (u) => {
+      chosenPredUri = u;
+      predInput.value = model.labelOf(u);
+      predList.innerHTML = '';
+    });
+  });
+
+  function renderValueArea(kindVal){
+    if(kindVal === 'literal'){
+      valueArea.innerHTML = `
+        <input type="text" class="add-prop-literal-input" placeholder="Waarde">
+        <input type="text" class="add-prop-lang-input" placeholder="taal (optioneel, bv. nl)">`;
+    } else {
+      chosenTargetUri = null;
+      valueArea.innerHTML = `
+        <input type="text" class="add-prop-target-input" placeholder="Zoek op naam, of plak URI of verkorte naam…" autocomplete="off">
+        <div class="rel-picker-list add-prop-target-list"></div>`;
+      const targetInput = valueArea.querySelector('.add-prop-target-input');
+      const targetList = valueArea.querySelector('.add-prop-target-list');
+      targetInput.addEventListener('input', () => {
+        chosenTargetUri = null;
+        renderOptionList(targetList, allResourceOptions, targetInput.value, (u) => {
+          chosenTargetUri = u;
+          targetInput.value = model.labelOf(u);
+          targetList.innerHTML = '';
+        });
+      });
+    }
+  }
+  renderValueArea('literal');
+  wrap.querySelectorAll('input[name="addPropKind"]').forEach(r => {
+    r.addEventListener('change', () => renderValueArea(r.value));
+  });
+
+  wrap.querySelector('.add-prop-cancel').addEventListener('click', () => renderDetail());
+
+  wrap.querySelector('.add-prop-submit').addEventListener('click', () => {
+    errorEl.textContent = '';
+    const predUri = chosenPredUri || resolveTypedInput(predInput.value);
+    if(!predUri){ errorEl.textContent = 'Kies een bestaande eigenschap/relatie, of plak een geldige verkorte naam of URI.'; return; }
+    const kindVal = wrap.querySelector('input[name="addPropKind"]:checked').value;
+    if(kindVal === 'literal'){
+      const val = wrap.querySelector('.add-prop-literal-input').value;
+      if(!val.trim()){ errorEl.textContent = 'Vul een waarde in.'; return; }
+      const lang = wrap.querySelector('.add-prop-lang-input').value.trim();
+      const term = lang ? {type:'literal', value:val, lang} : {type:'literal', value:val, datatype: XSD+'string'};
+      addTripleValue(subjectUri, predUri, term);
+    } else {
+      const targetInput = wrap.querySelector('.add-prop-target-input');
+      const targetUri = chosenTargetUri || resolveTypedInput(targetInput ? targetInput.value : '');
+      if(!targetUri){ errorEl.textContent = 'Kies een bestaande resource, of plak een geldige URI of verkorte naam.'; return; }
+      const targetNode = model.nodes[targetUri];
+      addTripleValue(subjectUri, predUri, (targetNode && targetNode.isBnode) ? {type:'bnode', value:targetUri} : {type:'uri', value:targetUri});
+    }
+  });
+
+  predInput.focus();
+}
+
+/* ================= TURTLE SERIALIZATION / DOWNLOAD ================= */
+
+function escapeLiteralBody(v){
+  return v.replace(/\\/g,'\\\\').replace(/"/g,'\\"');
+}
+
+function literalToTurtle(term){
+  const v = term.value;
+  let body;
+  if(v.indexOf('\n') >= 0 || v.indexOf('"') >= 0){
+    body = '"""' + v.replace(/\\/g,'\\\\').replace(/"""/g,'\\"\\"\\"') + '"""';
+  } else {
+    body = '"' + escapeLiteralBody(v) + '"';
+  }
+  if(term.lang) return body + '@' + term.lang;
+  if(term.datatype && term.datatype !== XSD+'string') return body + '^^' + uriToTurtle(term.datatype);
+  return body;
+}
+
+const SAFE_PN_LOCAL = /^[A-Za-z0-9_][A-Za-z0-9_.\-]*[A-Za-z0-9_\-]$|^[A-Za-z0-9_]$/;
+
+function uriToTurtle(uri){
+  const c = model.curie(uri);
+  if(c === uri) return '<' + uri + '>';
+  const local = c.slice(c.indexOf(':') + 1);
+  if(local.length > 0 && SAFE_PN_LOCAL.test(local)) return c;
+  return '<' + uri + '>';
+}
+
+function termToTurtle(term, isPredicate){
+  if(term.type === 'uri'){
+    if(isPredicate && term.value === RDF+'type') return 'a';
+    return uriToTurtle(term.value);
+  }
+  if(term.type === 'bnode') return term.value;
+  return literalToTurtle(term);
+}
+
+function serializeTurtle(){
+  const prefixes = model.prefixes;
+  const prefixNames = Object.keys(prefixes).sort();
+  let out = '';
+  prefixNames.forEach(p => {
+    out += '@prefix ' + p + ': <' + prefixes[p] + '> .\n';
+  });
+  out += '\n';
+
+  const order = [];
+  const bySubj = new Map();
+  model.triples.forEach(t => {
+    const skey = t.s.type + ':' + t.s.value;
+    if(!bySubj.has(skey)){
+      bySubj.set(skey, {term:t.s, preds: new Map()});
+      order.push(skey);
+    }
+    const entry = bySubj.get(skey);
+    if(!entry.preds.has(t.p.value)) entry.preds.set(t.p.value, []);
+    entry.preds.get(t.p.value).push(t.o);
+  });
+
+  order.forEach(skey => {
+    const entry = bySubj.get(skey);
+    const subjStr = termToTurtle(entry.term, false);
+    const predKeys = [...entry.preds.keys()];
+    const lines = predKeys.map(pUri => {
+      const objs = entry.preds.get(pUri);
+      const predStr = termToTurtle({type:'uri', value:pUri}, true);
+      const objStr = objs.map(o => termToTurtle(o, false)).join(', ');
+      return '    ' + predStr + ' ' + objStr;
+    });
+    out += subjStr + '\n' + lines.join(' ;\n') + ' .\n\n';
+  });
+
+  return out;
+}
+
+function downloadTurtle(){
+  if(!model) return;
+  const text = serializeTurtle();
+  const blob = new Blob([text], {type:'text/turtle'});
+  const url = URL.createObjectURL(blob);
+  const origName = fileNameEl.textContent || 'bestand.ttl';
+  const base = origName.replace(/\.(ttl|turtle|txt)$/i, '');
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = base + '-gewijzigd.ttl';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+})();
+
+
+</script>
+</body>
+</html>
