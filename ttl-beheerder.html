@@ -1505,6 +1505,8 @@ function renderApp(){
         <input type="text" id="searchInput" placeholder="Zoeken…" value="${esc(searchQuery)}">
       </div>
       ${currentTab === 'classes' ? '<div class="sidebar-toolbar"><button type="button" class="btn sidebar-add-btn" id="addClassBtn">+ Nieuwe klasse</button></div>' : ''}
+      ${currentTab === 'dataprops' ? '<div class="sidebar-toolbar"><button type="button" class="btn sidebar-add-btn" id="addDataPropBtn">+ Nieuwe eigenschap</button></div>' : ''}
+      ${currentTab === 'relprops' ? '<div class="sidebar-toolbar"><button type="button" class="btn sidebar-add-btn" id="addRelPropBtn">+ Nieuwe relatie</button></div>' : ''}
       ${currentTab === 'individuals' ? '<div class="sidebar-toolbar"><button type="button" class="btn sidebar-add-btn" id="addIndividualBtn">+ Nieuwe instantie</button></div>' : ''}
       <div class="sidebar-form-area" id="sidebarFormArea"></div>
       <div class="list" id="listEl"></div>
@@ -1533,6 +1535,10 @@ function renderApp(){
   if(addClassBtn) addClassBtn.addEventListener('click', openCreateClassForm);
   const addIndividualBtn = document.getElementById('addIndividualBtn');
   if(addIndividualBtn) addIndividualBtn.addEventListener('click', openCreateIndividualForm);
+  const addDataPropBtn = document.getElementById('addDataPropBtn');
+  if(addDataPropBtn) addDataPropBtn.addEventListener('click', () => openCreatePropertyForm('eigenschap'));
+  const addRelPropBtn = document.getElementById('addRelPropBtn');
+  if(addRelPropBtn) addRelPropBtn.addEventListener('click', () => openCreatePropertyForm('relatie'));
 
   renderList();
   renderDetail();
@@ -2235,6 +2241,26 @@ function createIndividual(individualUri, classUri, labelText){
   renderApp();
 }
 
+function createProperty(propUri, labelText, kind){
+  if(labelText && labelText.trim()){
+    addTripleValueRaw(propUri, RDFS+'label', {type:'literal', value:labelText.trim(), datatype:XSD+'string'});
+  }
+  addTripleValueRaw(propUri, RDF+'type', {type:'uri', value: kind === 'relatie' ? OWL+'ObjectProperty' : OWL+'DatatypeProperty'});
+  model.propKind[propUri] = kind;
+  if(!model.properties.includes(propUri)){
+    model.properties.push(propUri);
+    model.properties.sort((a,b) => model.labelOf(a).localeCompare(model.labelOf(b)));
+    const lbl = model.labelOf(propUri), cur = model.curie(propUri);
+    allPropertyOptions.push({uri:propUri, label:lbl, curie:cur, searchText:(lbl+' '+cur+' '+propUri).toLowerCase()});
+  }
+  hasUnsavedChanges = true;
+  updateDownloadState();
+  currentTab = kind === 'relatie' ? 'relprops' : 'dataprops';
+  selectedId = propUri;
+  searchQuery = '';
+  renderApp();
+}
+
 function deleteResource(uri){
   model.triples = model.triples.filter(t => {
     const involved = (t.s.type !== 'literal' && t.s.value === uri) || (t.o.type !== 'literal' && t.o.value === uri);
@@ -2295,6 +2321,52 @@ function openCreateClassForm(){
     }
     area.innerHTML = '';
     createClass(resolved, labelInput.value);
+  });
+  labelInput.focus();
+}
+
+function openCreatePropertyForm(kind){
+  const area = document.getElementById('sidebarFormArea');
+  if(!area) return;
+  const isRelatie = kind === 'relatie';
+  const what = isRelatie ? 'relatie' : 'eigenschap';
+  area.innerHTML = `
+    <div class="create-form">
+      <div class="add-prop-row">
+        <div class="add-prop-label">Label</div>
+        <input type="text" class="create-label-input" placeholder="Naam van de ${what}">
+      </div>
+      <div class="add-prop-row">
+        <div class="add-prop-label">URI of verkorte naam</div>
+        <input type="text" class="create-uri-input" placeholder="bv. ex:Mijn${isRelatie ? 'Relatie' : 'Eigenschap'}">
+      </div>
+      <div class="add-prop-error"></div>
+      <div class="add-prop-actions">
+        <button type="button" class="btn primary create-submit">Aanmaken</button>
+        <button type="button" class="rel-picker-cancel create-cancel">Annuleren</button>
+      </div>
+    </div>`;
+  const labelInput = area.querySelector('.create-label-input');
+  const uriInput = area.querySelector('.create-uri-input');
+  const errorEl = area.querySelector('.add-prop-error');
+
+  labelInput.addEventListener('input', () => {
+    if(!uriInput.dataset.touched) uriInput.value = suggestCurieFromLabel(labelInput.value);
+  });
+  uriInput.addEventListener('input', () => { uriInput.dataset.touched = '1'; });
+
+  area.querySelector('.create-cancel').addEventListener('click', () => { area.innerHTML = ''; });
+  area.querySelector('.create-submit').addEventListener('click', () => {
+    errorEl.textContent = '';
+    const raw = uriInput.value.trim();
+    if(!raw){ errorEl.textContent = 'Vul een URI of verkorte naam in.'; return; }
+    const resolved = resolveTypedInput(raw) || (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(raw) ? raw : null);
+    if(!resolved){ errorEl.textContent = 'Onbekend prefix of ongeldige URI.'; return; }
+    if(model.nodes[resolved] && (model.classes.includes(resolved) || model.individuals.includes(resolved) || model.properties.includes(resolved))){
+      errorEl.textContent = 'Deze URI wordt al gebruikt door een bestaand item.'; return;
+    }
+    area.innerHTML = '';
+    createProperty(resolved, labelInput.value, kind);
   });
   labelInput.focus();
 }
